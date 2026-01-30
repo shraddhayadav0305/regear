@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MacBook Pro M1 2020 - ReGear</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-recycle me-2"></i>ReGear
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="browse.html">Categories</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <a href="login.html" class="btn btn-outline-light rounded-pill px-4">Login</a>
+                    <a href="post_ad.html" class="btn btn-warning rounded-pill px-4 fw-bold text-dark">
+                        <i class="fas fa-plus me-2"></i>Sell Item
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container my-4">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="index.html" class="text-decoration-none">Home</a></li>
+                <li class="breadcrumb-item"><a href="browse.html" class="text-decoration-none">Laptops</a></li>
+                <li class="breadcrumb-item active" aria-current="page">MacBook Pro M1 2020</li>
+            </ol>
+        </nav>
+
+        <div class="row">
+            <!-- Left Column: Images -->
+            <div class="col-lg-8">
+                <div class="product-detail-container p-0">
+                    <div class="product-gallery position-relative">
+                        <img id="mainImage" src="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" alt="MacBook Pro">
+                        <button class="like-btn" style="top: 20px; right: 20px;" onclick="toggleLike(this)">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                    </div>
+                    <!-- Thumbnails -->
+                    <div class="d-flex gap-2 p-3 bg-white border-top overflow-auto">
+                        <img src="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&q=60" class="rounded border border-primary p-1" style="width: 80px; height: 80px; object-fit: cover; cursor: pointer;" onclick="changeImage(this)">
+                        <img src="https://images.unsplash.com/photo-1611186871348-d18c5c31e742?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&q=60" class="rounded border p-1" style="width: 80px; height: 80px; object-fit: cover; cursor: pointer;" onclick="changeImage(this)">
+                        <img src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&q=60" class="rounded border p-1" style="width: 80px; height: 80px; object-fit: cover; cursor: pointer;" onclick="changeImage(this)">
+                    </div>
+                </div>
+
+                <div class="product-detail-container mt-4">
+                    <div class="p-4">
+                        <h4 class="fw-bold mb-3">Description</h4>
+                        <p class="text-muted">
+                            Selling my well-maintained MacBook Pro M1 (2020) with 8GB RAM and 256GB SSD. It's in space grey color and has been used for about a year. Battery health is at 94%. No scratches or dents, always kept in a sleeve.
+                        </p>
+                        <p class="text-muted">
+                            Comes with original box, charger, and cable. Reason for selling: Upgrading to M2 Pro.
+                        </p>
+                        <hr>
+                        <h5 class="fw-bold mb-3">Specifications</h5>
+                        <div class="row g-3">
+                            <div class="col-6 col-md-4">
+                                <div class="p-3 bg-light rounded text-center">
+                                    <i class="fas fa-microchip fs-4 mb-2 text-primary"></i>
+                                    <div class="small text-muted">Processor</div>
+                                    <div class="fw-bold">Apple M1</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <div class="p-3 bg-light rounded text-center">
+                                    <i class="fas fa-memory fs-4 mb-2 text-primary"></i>
+                                    <div class="small text-muted">RAM</div>
+                                    <div class="fw-bold">8 GB</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <div class="p-3 bg-light rounded text-center">
+                                    <i class="fas fa-hdd fs-4 mb-2 text-primary"></i>
+                                    <div class="small text-muted">Storage</div>
+                                    <div class="fw-bold">256 GB SSD</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Price & Seller -->
+            <div class="col-lg-4">
+                <div class="product-detail-container p-4">
+                    <h2 class="fw-bold text-primary mb-1">$899</h2>
+                    <p class="text-muted small">Fixed Price</p>
+                    
+                    <h4 class="fw-bold mb-3">MacBook Pro M1 2020</h4>
+                    <div class="d-flex align-items-center text-muted mb-4">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        <span>Brooklyn, NY</span>
+                        <span class="mx-2">•</span>
+                        <span>Jan 15, 2026</span>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="chat.html" class="btn btn-primary btn-lg fw-bold">
+                            <i class="fas fa-comment-alt me-2"></i>Chat with Seller
+                        </a>
+                        <button class="btn btn-outline-primary btn-lg fw-bold">
+                            <i class="fas fa-phone-alt me-2"></i>Show Phone Number
+                        </button>
+                    </div>
+                </div>
+
+                <div class="seller-widget mt-4">
+                    <div class="position-relative">
+                        <img src="https://ui-avatars.com/api/?name=Alex+Doe&background=0D8ABC&color=fff" class="rounded-circle" width="60" height="60" alt="Seller">
+                        <span class="position-absolute bottom-0 end-0 p-1 bg-success border border-white rounded-circle"></span>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h5 class="fw-bold mb-0">Alex Doe</h5>
+                        <div class="text-muted small">Member since Dec 2024</div>
+                    </div>
+                    <i class="fas fa-chevron-right text-muted"></i>
+                </div>
+
+                <div class="bg-white rounded-3 p-4 shadow-sm">
+                    <h6 class="fw-bold mb-3">Safety Tips</h6>
+                    <ul class="list-unstyled small text-muted mb-0">
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Meet in a safe, public place</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Check the item before buying</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>Pay only after collecting item</li>
+                        <li><i class="fas fa-exclamation-circle text-danger me-2"></i>Avoid non-face-to-face transactions</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container text-center">
+            <p class="text-white-50">&copy; 2026 ReGear Inc.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+# 🛍️ ReGear Category System - Quick Reference
+
+## 🎯 Quick Navigation
+
+| Page | File | Purpose |
+|------|------|---------|
+| **Main Categories** | `categories.html` | Choose main category (7 options) |
+| **Sub Categories** | `subcategories.html` | Choose specific item type |
+| **Post Ad Form** | `addpost.html` | Create listing with details |
+| **Home** | `homepg.html` | Landing page (updated) |
+
+---
+
+## 🔗 Direct Links
+
+- **Categories Page**: `categories.html`
+- **Sample Flow**: 
+  - `categories.html` → Click "Electronics"
+  - `subcategories.html?category=Electronics` → Click "Mobile Phones"
+  - `addpost.html?category=Electronics&subcategory=Mobile%20Phones`
+
+---
+
+## 📋 7 Main Categories with Subcategories
+
+### 1. 📱 **ELECTRONICS** 
+→ Mobile Phones, Tablets, Laptops, Desktops, Cameras, Headphones, Smartwatches, Accessories
+
+### 2. 🏠 **APPLIANCES**
+→ TVs, Video-Audio, Kitchen Appliances, Fridges, Washing Machines, ACs, Microwaves, Ovens
+
+### 3. 📞 **MOBILE PHONES**
+→ Mobile Phones, Accessories, Tablets, Chargers, Cases, Protectors, Power Banks, Holders
+
+### 4. 💻 **COMPUTERS & LAPTOPS**
+→ Laptops, Desktops, Accessories, Monitors, Graphics Cards, CPUs, RAM, Motherboards
+
+### 5. 📷 **CAMERAS & LENSES**
+→ DSLR, Mirrorless, Compact, Lenses, Tripods, Bags, Lighting, Memory Cards
+
+### 6. 🎮 **GAMES & ENTERTAINMENT**
+→ Consoles, Games, Accessories, Gaming PCs, Headsets, Keyboards, Mice, Chairs
+
+### 7. 🎧 **AUDIO**
+→ Headphones, Earbuds, Speakers, Amplifiers, Microphones, Cables, Interfaces, Monitors
+
+---
+
+## 📝 Form Sections
+
+1. **Details** - Title, Condition, Description
+2. **Price** - Cost + Negotiable option
+3. **Photos** - Upload up to 5 images
+4. **Review** - Name + Phone
+
+---
+
+## 🎨 Color Codes
+
+```
+🟦 Primary: #002f34 (Dark Navy)
+🟦 Secondary: #0066cc (Bright Blue)
+🟨 Accent: #ffcc00 (Yellow)
+⬜ Background: #f8f9fa (Light Gray)
+```
+
+---
+
+## ✨ Key Features
+
+- ✅ Search categories
+- ✅ Interactive cards
+- ✅ Photo preview
+- ✅ Progress tracker
+- ✅ Mobile responsive
+- ✅ Breadcrumb nav
+- ✅ Success notification
+
+---
+
+## 🚀 How to Start
+
+1. Open `homepg.html` in browser
+2. Click yellow "Sell" button
+3. Follow the flow!
+
+---
+
+## 📊 Stats
+
+- **7** Main Categories
+- **56** Total Subcategories
+- **5** Form Steps
+- **80** Max Ad Title Characters
+- **2000** Max Description Characters
+- **5** Max Photos Allowed
+
+---
+
+**Everything is ready to use! Start selling! 🎉**

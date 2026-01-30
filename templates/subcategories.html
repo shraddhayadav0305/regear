@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Subcategory - ReGear</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background-color: #f8f9fa;
+        }
+
+        /* NAVBAR */
+        .navbar {
+            background-color: #002f34 !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 12px 0;
+        }
+
+        .navbar-brand {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #ffcc00 !important;
+        }
+
+        .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+            font-weight: 600;
+            margin: 0 10px;
+            transition: all 0.3s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            color: #ffcc00 !important;
+        }
+
+        /* BREADCRUMB */
+        .breadcrumb-section {
+            background-color: #fff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 30px;
+        }
+
+        .breadcrumb {
+            margin-bottom: 0;
+        }
+
+        .breadcrumb a {
+            color: #0066cc;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        /* PAGE HEADER */
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .page-header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #002f34;
+            margin-bottom: 10px;
+        }
+
+        .page-header p {
+            font-size: 1rem;
+            color: #666;
+            margin: 0;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            color: #004a99;
+        }
+
+        .back-link i {
+            margin-right: 8px;
+        }
+
+        /* SUBCATEGORIES GRID */
+        .subcategories-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            padding: 40px 0;
+        }
+
+        /* SUBCATEGORY CARD */
+        .subcategory-card {
+            background: #fff;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            padding: 30px 20px;
+            text-align: center;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .subcategory-card:hover {
+            border-color: #0066cc;
+            transform: translateY(-8px);
+            box-shadow: 0 12px 30px rgba(0, 102, 204, 0.2);
+            background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+        }
+
+        .subcat-icon {
+            font-size: 2.8rem;
+            color: #0066cc;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .subcategory-card:hover .subcat-icon {
+            transform: scale(1.1);
+            color: #004a99;
+        }
+
+        .subcat-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #002f34;
+            margin-bottom: 8px;
+        }
+
+        .subcat-desc {
+            font-size: 0.85rem;
+            color: #999;
+            margin: 0;
+        }
+
+        /* DIVIDER */
+        .category-section {
+            margin-bottom: 50px;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #002f34;
+            padding: 20px 0;
+            border-bottom: 3px solid #0066cc;
+            margin-bottom: 30px;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .subcategories-container {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+            }
+
+            .page-header h1 {
+                font-size: 1.8rem;
+            }
+
+            .subcat-icon {
+                font-size: 2.2rem;
+            }
+
+            .subcategory-card {
+                padding: 20px 15px;
+            }
+        }
+
+        /* FOOTER */
+        .footer {
+            background-color: #002f34;
+            color: #fff;
+            padding: 40px 0 20px;
+            margin-top: 60px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .footer h6 {
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #ffcc00;
+        }
+
+        .footer a {
+            color: rgba(255, 255, 255, 0.8);
+            transition: all 0.3s;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .footer a:hover {
+            color: #ffcc00;
+            padding-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-lg">
+            <a class="navbar-brand" href="homepg.html">
+                <i class="fas fa-recycle me-2"></i>ReGear
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="homepg.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="categories.html">Sell</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- BREADCRUMB -->
+    <div class="breadcrumb-section">
+        <div class="container-lg">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="homepg.html">Home</a></li>
+                    <li class="breadcrumb-item"><a href="categories.html">Sell</a></li>
+                    <li class="breadcrumb-item active" id="categoryBreadcrumb">Categories</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="container-lg">
+        <a href="categories.html" class="back-link">
+            <i class="fas fa-arrow-left"></i>Back to Categories
+        </a>
+
+        <!-- PAGE HEADER -->
+        <div class="page-header">
+            <h1 id="mainTitle">Choose a Subcategory</h1>
+            <p id="mainDescription">Select the specific item you want to sell</p>
+        </div>
+
+        <!-- SUBCATEGORIES GRID -->
+        <div id="subcategoriesContainer"></div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="container-lg">
+            <div class="footer-content">
+                <div>
+                    <h6>ABOUT</h6>
+                    <a href="#">About ReGear</a>
+                    <a href="#">Blog</a>
+                    <a href="#">Careers</a>
+                </div>
+                <div>
+                    <h6>HELP</h6>
+                    <a href="#">Contact Us</a>
+                    <a href="#">Safety Tips</a>
+                    <a href="#">FAQ</a>
+                </div>
+                <div>
+                    <h6>POLICIES</h6>
+                    <a href="#">Terms of Use</a>
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Cookie Policy</a>
+                </div>
+            </div>
+            <div style="text-align: center; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px;">
+                <p style="margin: 0; opacity: 0.8;">&copy; 2024 ReGear. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Subcategories data structure
+        const subcategoriesData = {
+            'Electronics': {
+                title: 'Electronics',
+                description: 'Choose the electronics item you want to sell',
+                subcategories: [
+                    { name: 'Mobile Phones', icon: 'fas fa-mobile-alt' },
+                    { name: 'Tablets', icon: 'fas fa-tablet-alt' },
+                    { name: 'Laptops', icon: 'fas fa-laptop' },
+                    { name: 'Desktops', icon: 'fas fa-desktop' },
+                    { name: 'Cameras', icon: 'fas fa-camera' },
+                    { name: 'Headphones', icon: 'fas fa-headphones' },
+                    { name: 'Smartwatches', icon: 'fas fa-watch' },
+                    { name: 'Accessories', icon: 'fas fa-plug' }
+                ]
+            },
+            'Mobile': {
+                title: 'Mobile Phones & Accessories',
+                description: 'Choose from mobile phones, tablets, and accessories',
+                subcategories: [
+                    { name: 'Mobile Phones', icon: 'fas fa-mobile-alt' },
+                    { name: 'Mobile Phone Accessories', icon: 'fas fa-mobile-alt' },
+                    { name: 'Tablets', icon: 'fas fa-tablet-alt' },
+                    { name: 'Chargers & Cables', icon: 'fas fa-plug' },
+                    { name: 'Covers & Cases', icon: 'fas fa-shield-alt' },
+                    { name: 'Screen Protectors', icon: 'fas fa-rectangle' },
+                    { name: 'Power Banks', icon: 'fas fa-battery-full' },
+                    { name: 'Phone Holders', icon: 'fas fa-hand-holding' }
+                ]
+            },
+            'Appliances': {
+                title: 'Home Appliances',
+                description: 'Select the appliance category you want to sell',
+                subcategories: [
+                    { name: 'TVs', icon: 'fas fa-tv' },
+                    { name: 'Video - Audio', icon: 'fas fa-volume-up' },
+                    { name: 'Kitchen & Other Appliances', icon: 'fas fa-utensils' },
+                    { name: 'Fridges', icon: 'fas fa-snowflake' },
+                    { name: 'Washing Machines', icon: 'fas fa-water' },
+                    { name: 'ACs', icon: 'fas fa-wind' },
+                    { name: 'Microwaves', icon: 'fas fa-microwave' },
+                    { name: 'Ovens', icon: 'fas fa-oven' }
+                ]
+            },
+            'Computers': {
+                title: 'Computers & Laptops',
+                description: 'Choose the computer item you want to sell',
+                subcategories: [
+                    { name: 'Laptops', icon: 'fas fa-laptop' },
+                    { name: 'Desktops', icon: 'fas fa-desktop' },
+                    { name: 'Computer Accessories', icon: 'fas fa-keyboard' },
+                    { name: 'Hard Disks, Printers & Monitors', icon: 'fas fa-hdd' },
+                    { name: 'Graphics Cards', icon: 'fas fa-microchip' },
+                    { name: 'Processors', icon: 'fas fa-microchip' },
+                    { name: 'RAM', icon: 'fas fa-memory' },
+                    { name: 'Motherboards', icon: 'fas fa-microchip' }
+                ]
+            },
+            'Cameras': {
+                title: 'Cameras & Lenses',
+                description: 'Select the camera equipment you want to sell',
+                subcategories: [
+                    { name: 'DSLR Cameras', icon: 'fas fa-camera' },
+                    { name: 'Mirrorless Cameras', icon: 'fas fa-camera' },
+                    { name: 'Compact Cameras', icon: 'fas fa-camera' },
+                    { name: 'Lenses', icon: 'fas fa-ring' },
+                    { name: 'Tripods & Stands', icon: 'fas fa-gopuram' },
+                    { name: 'Camera Bags', icon: 'fas fa-bag-shopping' },
+                    { name: 'Lighting Equipment', icon: 'fas fa-lightbulb' },
+                    { name: 'Memory Cards', icon: 'fas fa-sd-card' }
+                ]
+            },
+            'Games': {
+                title: 'Games & Entertainment',
+                description: 'Choose the gaming item you want to sell',
+                subcategories: [
+                    { name: 'Gaming Consoles', icon: 'fas fa-gamepad' },
+                    { name: 'Games & Software', icon: 'fas fa-compact-disc' },
+                    { name: 'Gaming Accessories', icon: 'fas fa-joystick' },
+                    { name: 'Gaming Laptops', icon: 'fas fa-laptop' },
+                    { name: 'Gaming Headsets', icon: 'fas fa-headphones' },
+                    { name: 'Gaming Keyboards', icon: 'fas fa-keyboard' },
+                    { name: 'Gaming Mice', icon: 'fas fa-mouse' },
+                    { name: 'Gaming Chairs', icon: 'fas fa-chair' }
+                ]
+            },
+            'Audio': {
+                title: 'Audio Equipment',
+                description: 'Select the audio equipment you want to sell',
+                subcategories: [
+                    { name: 'Headphones', icon: 'fas fa-headphones' },
+                    { name: 'Earbuds', icon: 'fas fa-headphones' },
+                    { name: 'Speakers', icon: 'fas fa-speaker' },
+                    { name: 'Amplifiers', icon: 'fas fa-volume-up' },
+                    { name: 'Microphones', icon: 'fas fa-microphone' },
+                    { name: 'Audio Cables', icon: 'fas fa-plug' },
+                    { name: 'Audio Interfaces', icon: 'fas fa-sliders-h' },
+                    { name: 'Studio Monitors', icon: 'fas fa-speaker' }
+                ]
+            }
+        };
+
+        // Initialize page
+        function initializePage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const category = urlParams.get('category');
+
+            if (!category || !subcategoriesData[category]) {
+                window.location.href = 'categories.html';
+                return;
+            }
+
+            const data = subcategoriesData[category];
+            document.getElementById('mainTitle').textContent = data.title;
+            document.getElementById('mainDescription').textContent = data.description;
+            document.getElementById('categoryBreadcrumb').textContent = category;
+
+            renderSubcategories(data.subcategories, category);
+        }
+
+        function renderSubcategories(subcategories, parentCategory) {
+            const container = document.getElementById('subcategoriesContainer');
+            container.innerHTML = '';
+
+            const grid = document.createElement('div');
+            grid.className = 'subcategories-container';
+
+            subcategories.forEach(subcat => {
+                const card = document.createElement('div');
+                card.className = 'subcategory-card';
+                card.innerHTML = `
+                    <i class="${subcat.icon} subcat-icon"></i>
+                    <div class="subcat-name">${subcat.name}</div>
+                    <p class="subcat-desc">Click to post</p>
+                `;
+                card.onclick = () => goToAddPost(parentCategory, subcat.name);
+                grid.appendChild(card);
+            });
+
+            container.appendChild(grid);
+        }
+
+        function goToAddPost(category, subcategory) {
+            window.location.href = `addpost.html?category=${encodeURIComponent(category)}&subcategory=${encodeURIComponent(subcategory)}`;
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block content %}
+
+<h2>All Users</h2>
+<hr>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Created</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.role }}</td>
+            <td>{{ user.created_at }}</td>
+            <td>
+                {% if user.role != 'blocked' %}
+                    <a href="/admin/block/{{ user.id }}" class="btn btn-sm btn-danger">Block</a>
+                {% else %}
+                    <a href="/admin/unblock/{{ user.id }}" class="btn btn-sm btn-success">Unblock</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

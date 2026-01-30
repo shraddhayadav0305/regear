@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post an Ad - ReGear</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">
+                <i class="fas fa-recycle me-2"></i>ReGear
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Home</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dropdown">
+                        <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
+                            <img src="https://ui-avatars.com/api/?name=User&background=random" alt="" width="32" height="32" class="rounded-circle me-2">
+                            <strong>My Account</strong>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
+                            <li><a class="dropdown-item" href="dashboard.html">Dashboard</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="index.html">Sign out</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-5">
+                        <h2 class="fw-bold mb-4 text-center">Post Your Ad</h2>
+                        
+                        <form onsubmit="handlePostAd(event)">
+                            <!-- Section 1: Product Details -->
+                            <h5 class="fw-bold mb-3 border-bottom pb-2">Include some details</h5>
+                            
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Ad Title</label>
+                                <input type="text" class="form-control" placeholder="e.g. MacBook Pro M1 2020 8GB RAM" required>
+                                <div class="form-text">Mention the key features of your item (e.g. brand, model, age, type)</div>
+                            </div>
+
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Category</label>
+                                    <select class="form-select" required>
+                                        <option value="" selected disabled>Select Category</option>
+                                        <option>Laptops</option>
+                                        <option>Desktops</option>
+                                        <option>Components (GPU, CPU, RAM)</option>
+                                        <option>Peripherals (Keyboard, Mouse)</option>
+                                        <option>Monitors</option>
+                                        <option>Audio</option>
+                                        <option>Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">Condition</label>
+                                    <select class="form-select" required>
+                                        <option value="" selected disabled>Select Condition</option>
+                                        <option>Brand New</option>
+                                        <option>Like New</option>
+                                        <option>Used - Good</option>
+                                        <option>Used - Fair</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Description</label>
+                                <textarea class="form-control" rows="5" placeholder="Describe your item in detail. Include condition, reason for selling, and any defects." required></textarea>
+                            </div>
+
+                            <!-- Section 2: Price -->
+                            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-5">Set a price</h5>
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Price ($)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" placeholder="0.00" required>
+                                </div>
+                            </div>
+
+                            <!-- Section 3: Photos -->
+                            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-5">Upload up to 5 photos</h5>
+                            <div class="mb-4">
+                                <div class="border rounded p-5 text-center bg-light" style="border-style: dashed !important; border-width: 2px !important;">
+                                    <i class="fas fa-camera fa-3x text-muted mb-3"></i>
+                                    <p class="mb-2">Drag and drop photos here</p>
+                                    <p class="text-muted small">or</p>
+                                    <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('fileInput').click()">Browse Photos</button>
+                                    <input type="file" id="fileInput" class="d-none" multiple accept="image/*" onchange="previewPhotos(this)">
+                                </div>
+                                <div id="photoPreview" class="d-flex gap-2 mt-3 overflow-auto">
+                                    <!-- Preview images will appear here -->
+                                </div>
+                            </div>
+
+                            <!-- Section 4: Contact Details -->
+                            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-5">Review your details</h5>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Name</label>
+                                        <input type="text" class="form-control" value="John Doe" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Phone Number</label>
+                                        <input type="tel" class="form-control" value="+1 234 567 8900">
+                                        <div class="form-text">Buyers will see this number</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-warning btn-lg fw-bold text-dark">Post Now</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+        function previewPhotos(input) {
+            const container = document.getElementById('photoPreview');
+            container.innerHTML = ''; // Clear existing
+            
+            if (input.files) {
+                Array.from(input.files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.className = 'rounded border';
+                        img.style.width = '100px';
+                        img.style.height = '100px';
+                        img.style.objectFit = 'cover';
+                        container.appendChild(img);
+                    }
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
+
+        function handlePostAd(event) {
+            event.preventDefault();
+            const btn = event.target.querySelector('button[type="submit"]');
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Posting...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                alert('Ad posted successfully! Redirecting to dashboard...');
+                window.location.href = 'dashboard.html';
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
+
+

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sell Electronics</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #f4f6f8;
+            font-family: Arial;
+        }
+
+        .container-box {
+            max-width: 1100px;
+            margin: 40px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .card-box {
+            border: 2px solid #e5e5e5;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .card-box:hover {
+            border-color: #0d6efd;
+        }
+
+        .card-box.active {
+            border-color: #0d6efd;
+            background: #f0f6ff;
+        }
+
+        .sub-box {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .sub-item {
+            padding: 12px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+
+        .sub-item:hover {
+            background: #eef5ff;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container-box">
+
+    <h3>Sell Electronics & Hardware</h3>
+
+    <div class="grid">
+
+        <div class="card-box" onclick="openSub('mobiles', this)">
+            <i class="fa-solid fa-mobile-screen"></i>
+            <h6>Mobiles</h6>
+        </div>
+
+        <div class="card-box" onclick="openSub('laptops', this)">
+            <i class="fa-solid fa-laptop"></i>
+            <h6>Laptops</h6>
+        </div>
+
+        <div class="card-box" onclick="openSub('computers', this)">
+            <i class="fa-solid fa-desktop"></i>
+            <h6>Computers</h6>
+        </div>
+
+    </div>
+
+    <!-- SUB CATEGORIES -->
+    <div class="sub-box" id="mobiles">
+        <h5>Mobiles</h5>
+        <div class="sub-item">Smartphones</div>
+        <div class="sub-item">Feature Phones</div>
+        <div class="sub-item">Accessories</div>
+    </div>
+
+    <div class="sub-box" id="laptops">
+        <h5>Laptops</h5>
+        <div class="sub-item">Gaming Laptop</div>
+        <div class="sub-item">Business Laptop</div>
+    </div>
+
+    <div class="sub-box" id="computers">
+        <h5>Computers</h5>
+        <div class="sub-item">Desktop PC</div>
+        <div class="sub-item">All-in-One</div>
+    </div>
+
+</div>
+
+<!-- ✅ SCRIPT MUST BE HERE -->
+<script>
+    function openSub(id, element) {
+
+        // hide all sub boxes
+        document.querySelectorAll(".sub-box").forEach(box => {
+            box.style.display = "none";
+        });
+
+        // remove active class
+        document.querySelectorAll(".card-box").forEach(card => {
+            card.classList.remove("active");
+        });
+
+        // show selected
+        document.getElementById(id).style.display = "block";
+        element.classList.add("active");
+    }
+</script>
+
+</body>
+</html>

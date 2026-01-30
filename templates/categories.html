@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sell - Choose Category - ReGear</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background-color: #f8f9fa;
+        }
+
+        /* NAVBAR */
+        .navbar {
+            background-color: #002f34 !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 12px 0;
+        }
+
+        .navbar-brand {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #ffcc00 !important;
+        }
+
+        .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+            font-weight: 600;
+            margin: 0 10px;
+            transition: all 0.3s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            color: #ffcc00 !important;
+        }
+
+        /* BREADCRUMB */
+        .breadcrumb-section {
+            background-color: #fff;
+            padding: 20px 0;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 40px;
+        }
+
+        .breadcrumb {
+            margin-bottom: 0;
+        }
+
+        /* PAGE TITLE */
+        .page-header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #002f34;
+            margin-bottom: 10px;
+        }
+
+        .page-header p {
+            font-size: 1.1rem;
+            color: #666;
+            margin: 0;
+        }
+
+        /* CATEGORY GRID */
+        .categories-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            padding: 40px 0;
+        }
+
+        /* MAIN CATEGORY CARD */
+        .main-category-card {
+            background: #fff;
+            border: 2px solid #e8e8e8;
+            border-radius: 15px;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .main-category-card:hover {
+            border-color: #0066cc;
+            transform: translateY(-12px);
+            box-shadow: 0 15px 40px rgba(0, 102, 204, 0.25);
+        }
+
+        .category-icon-box {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e8eaed 100%);
+            padding: 40px 20px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 140px;
+            font-size: 3.5rem;
+            transition: all 0.3s;
+        }
+
+        .main-category-card:hover .category-icon-box {
+            background: linear-gradient(135deg, #0066cc 0%, #004a99 100%);
+            color: #fff;
+        }
+
+        .category-content {
+            padding: 20px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .category-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #002f34;
+            margin-bottom: 8px;
+            transition: all 0.3s;
+        }
+
+        .category-desc {
+            font-size: 0.9rem;
+            color: #999;
+            margin-bottom: 12px;
+            flex-grow: 1;
+        }
+
+        .category-arrow {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            background-color: #f0f0f0;
+            border-radius: 50%;
+            color: #0066cc;
+            font-weight: bold;
+            transition: all 0.3s;
+            margin-top: auto;
+        }
+
+        .main-category-card:hover .category-arrow {
+            background-color: #0066cc;
+            color: #fff;
+            transform: translateX(5px);
+        }
+
+        /* SEARCH BAR */
+        .search-section {
+            background-color: #fff;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            padding: 12px 20px 12px 45px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        .search-box input:focus {
+            border-color: #0066cc;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .categories-container {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+            }
+
+            .page-header h1 {
+                font-size: 2rem;
+            }
+
+            .category-icon-box {
+                min-height: 100px;
+                font-size: 2.5rem;
+            }
+        }
+
+        /* FOOTER */
+        .footer {
+            background-color: #002f34;
+            color: #fff;
+            padding: 40px 0 20px;
+            margin-top: 60px;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .footer h6 {
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #ffcc00;
+        }
+
+        .footer a {
+            color: rgba(255, 255, 255, 0.8);
+            transition: all 0.3s;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .footer a:hover {
+            color: #ffcc00;
+            padding-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-lg">
+            <a class="navbar-brand" href="homepg.html">
+                <i class="fas fa-recycle me-2"></i>ReGear
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="homepg.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="categories.html">Sell</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- BREADCRUMB -->
+    <div class="breadcrumb-section">
+        <div class="container-lg">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="homepg.html">Home</a></li>
+                    <li class="breadcrumb-item active">Sell</li>
+                    <li class="breadcrumb-item active">Categories</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="container-lg">
+        <!-- PAGE HEADER -->
+        <div class="page-header">
+            <h1>Choose a Category</h1>
+            <p>Select the category that best describes what you want to sell</p>
+        </div>
+
+        <!-- SEARCH BAR -->
+        <div class="search-section">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="categorySearch" placeholder="Search categories..." onkeyup="searchCategories()">
+            </div>
+        </div>
+
+        <!-- CATEGORIES GRID -->
+        <div class="categories-container" id="categoriesGrid">
+            <!-- Categories will be generated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div class="container-lg">
+            <div class="footer-content">
+                <div>
+                    <h6>ABOUT</h6>
+                    <a href="#">About ReGear</a>
+                    <a href="#">Blog</a>
+                    <a href="#">Careers</a>
+                </div>
+                <div>
+                    <h6>HELP</h6>
+                    <a href="#">Contact Us</a>
+                    <a href="#">Safety Tips</a>
+                    <a href="#">FAQ</a>
+                </div>
+                <div>
+                    <h6>POLICIES</h6>
+                    <a href="#">Terms of Use</a>
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Cookie Policy</a>
+                </div>
+            </div>
+            <div style="text-align: center; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px;">
+                <p style="margin: 0; opacity: 0.8;">&copy; 2024 ReGear. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize the page
+        function initializeCategories() {
+            const categoriesGrid = document.getElementById('categoriesGrid');
+            const categories = [
+                { name: 'Electronics', icon: 'fas fa-mobile-alt', desc: 'Mobiles, Computers, Cameras & more', key: 'Electronics' },
+                { name: 'Appliances', icon: 'fas fa-microchip', desc: 'TVs, Fridges, ACs & Washing Machines', key: 'Appliances' },
+                { name: 'Mobile Phones', icon: 'fas fa-phone', desc: 'Phones, Accessories & Tablets', key: 'Mobile' },
+                { name: 'Computers & Laptops', icon: 'fas fa-laptop', desc: 'Laptops, Desktops & Components', key: 'Computers' },
+                { name: 'Cameras & Lenses', icon: 'fas fa-camera', desc: 'DSLR, Mirrorless & Lenses', key: 'Cameras' },
+                { name: 'Games & Entertainment', icon: 'fas fa-gamepad', desc: 'Consoles, Games & Accessories', key: 'Games' },
+                { name: 'Audio', icon: 'fas fa-headphones', desc: 'Headphones, Speakers & Audio Systems', key: 'Audio' }
+            ];
+
+            categoriesGrid.innerHTML = categories.map(cat => `
+                <div class="main-category-card" onclick="goToSubcategories('${cat.key}')">
+                    <div class="category-icon-box">
+                        <i class="${cat.icon}"></i>
+                    </div>
+                    <div class="category-content">
+                        <div class="category-name">${cat.name}</div>
+                        <div class="category-desc">${cat.desc}</div>
+                        <div class="category-arrow">→</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function goToSubcategories(category) {
+            window.location.href = `subcategories.html?category=${category}`;
+        }
+
+        function searchCategories() {
+            const searchTerm = document.getElementById('categorySearch').value.toLowerCase();
+            const cards = document.querySelectorAll('.main-category-card');
+            
+            cards.forEach(card => {
+                const categoryName = card.querySelector('.category-name').textContent.toLowerCase();
+                const categoryDesc = card.querySelector('.category-desc').textContent.toLowerCase();
+                
+                if (categoryName.includes(searchTerm) || categoryDesc.includes(searchTerm)) {
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', initializeCategories);
+    </script>
+</body>
+</html>

@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post an Ad - ReGear</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="css/style.css" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .navbar {
+            background-color: #002f34 !important;
+        }
+
+        .navbar-brand {
+            color: #ffcc00 !important;
+            font-weight: 800;
+            font-size: 1.8rem;
+        }
+
+        .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+        }
+
+        .nav-link:hover {
+            color: #ffcc00 !important;
+        }
+
+        .progress-header {
+            background: #fff;
+            border-bottom: 2px solid #f0f0f0;
+            padding: 20px 0;
+            margin-bottom: 30px;
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e8e8e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-weight: 700;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-circle {
+            background-color: #0066cc;
+            color: #fff;
+        }
+
+        .step.completed .step-circle {
+            background-color: #28a745;
+            color: #fff;
+        }
+
+        .step-label {
+            font-size: 0.9rem;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .step.active .step-label {
+            color: #0066cc;
+        }
+
+        .form-section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #002f34;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #0066cc;
+        }
+
+        .form-label {
+            font-weight: 700;
+            color: #002f34;
+            margin-bottom: 10px;
+        }
+
+        .form-control, .form-select {
+            border: 2px solid #e8e8e8;
+            border-radius: 8px;
+            padding: 12px 15px;
+            transition: all 0.3s;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: #0066cc;
+            box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+        }
+
+        .form-text {
+            color: #999;
+            font-size: 0.85rem;
+        }
+
+        .photo-upload-area {
+            border: 2px dashed #0066cc;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background-color: #f8f9fa;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .photo-upload-area:hover {
+            background-color: #e8eef5;
+            border-color: #004a99;
+        }
+
+        .photo-upload-area i {
+            font-size: 3rem;
+            color: #0066cc;
+            margin-bottom: 15px;
+        }
+
+        .photoPreview {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .preview-item {
+            position: relative;
+            width: 100px;
+            height: 100px;
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #0066cc;
+        }
+
+        .preview-item .remove-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ff4444;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .preview-item .remove-btn:hover {
+            background: #cc0000;
+        }
+
+        .breadcrumb-section {
+            background-color: #fff;
+            padding: 15px 0;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .btn-primary-custom {
+            background: linear-gradient(135deg, #0066cc, #004a99);
+            border: none;
+            color: #fff;
+            font-weight: 700;
+            padding: 12px 30px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 102, 204, 0.3);
+        }
+
+        .form-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .condition-option {
+            padding: 15px;
+            border: 2px solid #e8e8e8;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .condition-option:hover {
+            border-color: #0066cc;
+            background-color: #f8f9fa;
+        }
+
+        .condition-option input[type="radio"] {
+            margin-right: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .form-section {
+                padding: 20px;
+            }
+
+            .section-title {
+                font-size: 1.2rem;
+            }
+
+            .progress-steps {
+                font-size: 0.8rem;
+            }
+
+            .step-circle {
+                width: 35px;
+                height: 35px;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-lg">
+            <a class="navbar-brand" href="homepg.html">
+                <i class="fas fa-recycle me-2"></i>ReGear
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="homepg.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="categories.html">Sell</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="dashboard.html">Dashboard</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- BREADCRUMB -->
+    <div class="breadcrumb-section">
+        <div class="container-lg">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb" style="margin-bottom: 0;">
+                    <li class="breadcrumb-item"><a href="homepg.html">Home</a></li>
+                    <li class="breadcrumb-item"><a href="categories.html">Sell</a></li>
+                    <li class="breadcrumb-item" id="categoryBreadcrumb">Category</li>
+                    <li class="breadcrumb-item active">Post Ad</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- PROGRESS HEADER -->
+    <div class="progress-header">
+        <div class="container-lg">
+            <div class="progress-steps">
+                <div class="step completed">
+                    <div class="step-circle"><i class="fas fa-check"></i></div>
+                    <div class="step-label">Category</div>
+                </div>
+                <div class="step active">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Details</div>
+                </div>
+                <div class="step">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Photos</div>
+                </div>
+                <div class="step">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">Price</div>
+                </div>
+                <div class="step">
+                    <div class="step-circle">5</div>
+                    <div class="step-label">Review</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="container-lg">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- SUCCESS MESSAGE -->
+                <div id="successMessage" class="form-success d-none">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong id="successText"></strong>
+                </div>
+
+                <form onsubmit="handlePostAd(event)" id="postAdForm">
+                    <!-- SECTION 1: CATEGORY & DETAILS -->
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-info-circle me-2" style="color: #0066cc;"></i>Include some details
+                        </div>
+
+                        <!-- CATEGORY DISPLAY -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Primary Category</label>
+                                <input type="text" class="form-control" id="primaryCategory" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Sub Category</label>
+                                <input type="text" class="form-control" id="subCategory" disabled>
+                            </div>
+                        </div>
+
+                        <!-- BRAND/COMPANY SELECTOR -->
+                        <div class="mb-4" id="brandSelectorContainer" style="display: none;">
+                            <label class="form-label">Brand/Company <span style="color: #ff4444;">*</span></label>
+                            <select class="form-select" id="brandSelector" required>
+                                <option value="">-- Select a Brand --</option>
+                            </select>
+                            <div class="form-text">Choose the brand/company of the product you're selling</div>
+                        </div>
+
+                        <!-- TITLE -->
+                        <div class="mb-4">
+                            <label class="form-label">Ad Title <span style="color: #ff4444;">*</span></label>
+                            <input type="text" class="form-control" id="adTitle" placeholder="e.g. iPhone 13 Pro Max 256GB - Excellent Condition" required maxlength="80">
+                            <div class="form-text">Be specific and include brand, model, and key features (Max 80 characters)</div>
+                        </div>
+
+                        <!-- CONDITION -->
+                        <div class="mb-4">
+                            <label class="form-label">Condition <span style="color: #ff4444;">*</span></label>
+                            <div>
+                                <div class="condition-option">
+                                    <input type="radio" name="condition" value="Brand New" id="cond1" required>
+                                    <label for="cond1" style="margin: 0; cursor: pointer;">
+                                        <strong>Brand New</strong> - Sealed & unopened
+                                    </label>
+                                </div>
+                                <div class="condition-option">
+                                    <input type="radio" name="condition" value="Like New" id="cond2">
+                                    <label for="cond2" style="margin: 0; cursor: pointer;">
+                                        <strong>Like New</strong> - Unused, minimal or no signs of use
+                                    </label>
+                                </div>
+                                <div class="condition-option">
+                                    <input type="radio" name="condition" value="Used - Good" id="cond3">
+                                    <label for="cond3" style="margin: 0; cursor: pointer;">
+                                        <strong>Used - Good</strong> - Works perfectly, minor cosmetic wear
+                                    </label>
+                                </div>
+                                <div class="condition-option">
+                                    <input type="radio" name="condition" value="Used - Fair" id="cond4">
+                                    <label for="cond4" style="margin: 0; cursor: pointer;">
+                                        <strong>Used - Fair</strong> - Works well, visible signs of wear
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DESCRIPTION -->
+                        <div class="mb-4">
+                            <label class="form-label">Description <span style="color: #ff4444;">*</span></label>
+                            <textarea class="form-control" id="description" rows="6" placeholder="Provide accurate details about your item:
+- What's included (original box, accessories, charger, etc.)
+- Any defects or damage
+- How long you've owned it
+- Why you're selling it
+- Maintenance history" required maxlength="2000"></textarea>
+                            <div class="form-text">Be honest and detailed - accurate descriptions lead to better sales (Max 2000 characters)</div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: PRICE -->
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-tag me-2" style="color: #0066cc;"></i>Set a Price
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Price (USD) <span style="color: #ff4444;">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text" style="border: 2px solid #e8e8e8; border-right: none;">$</span>
+                                <input type="number" class="form-control" id="price" placeholder="0.00" step="0.01" min="1" required style="border: 2px solid #e8e8e8; border-left: none;">
+                            </div>
+                            <div class="form-text">Set a competitive price. You can negotiate with buyers.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="negotiable">
+                                <label class="form-check-label" for="negotiable">
+                                    Price is negotiable
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: PHOTOS -->
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-images me-2" style="color: #0066cc;"></i>Upload Photos (Up to 5)
+                        </div>
+
+                        <div class="photo-upload-area" onclick="document.getElementById('fileInput').click()">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p class="mb-2"><strong>Drag and drop photos here</strong></p>
+                            <p class="form-text">or click to browse</p>
+                            <p class="form-text">Supported formats: JPG, PNG (Max 5 photos, 5MB each)</p>
+                        </div>
+                        <input type="file" id="fileInput" class="d-none" multiple accept="image/*" onchange="previewPhotos(this)">
+
+                        <div id="photoPreview" class="photoPreview"></div>
+                        <div id="photoCount" class="form-text mt-3"></div>
+                    </div>
+
+                    <!-- SECTION 4: SELLER DETAILS -->
+                    <div class="form-section">
+                        <div class="section-title">
+                            <i class="fas fa-user me-2" style="color: #0066cc;"></i>Your Details
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="sellerName" value="User Name" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" id="phone" value="+1 (555) 123-4567" required>
+                                <div class="form-text">Buyers will use this to contact you</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SUBMIT BUTTON -->
+                    <div style="margin-bottom: 40px;">
+                        <button type="submit" class="btn btn-primary-custom w-100 btn-lg">
+                            <i class="fas fa-check-circle me-2"></i>Post Your Ad Now
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary w-100 mt-2" onclick="window.location.href='categories.html'">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer style="background-color: #002f34; color: #fff; padding: 40px 0 20px; margin-top: 60px;">
+        <div class="container-lg">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 30px; margin-bottom: 30px;">
+                <div>
+                    <h6 style="font-weight: 700; margin-bottom: 15px; color: #ffcc00;">ABOUT</h6>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">About ReGear</a>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">Blog</a>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">Careers</a>
+                </div>
+                <div>
+                    <h6 style="font-weight: 700; margin-bottom: 15px; color: #ffcc00;">HELP</h6>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">Contact Us</a>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">Safety Tips</a>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">FAQ</a>
+                </div>
+                <div>
+                    <h6 style="font-weight: 700; margin-bottom: 15px; color: #ffcc00;">POLICIES</h6>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">Terms of Use</a>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">Privacy Policy</a>
+                    <a href="#" style="color: rgba(255, 255, 255, 0.8); text-decoration: none; display: block; margin-bottom: 8px;">Cookie Policy</a>
+                </div>
+            </div>
+            <div style="text-align: center; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px;">
+                <p style="margin: 0; opacity: 0.8;">&copy; 2024 ReGear. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let uploadedFiles = [];
+
+        // Brand database - Only for Mobile category
+        const brandsByCategory = {
+            'Mobile': [
+                'Samsung',
+                'Nokia',
+                'Asus',
+                'iPhone',
+                'Micromax',
+                'Sony',
+                'HTC',
+                'BlackBerry',
+                'Karbonn',
+                'LG',
+                'Other Mobiles',
+                'Intex',
+                'Lava',
+                'Lenovo',
+                'Mi',
+                'Motorola',
+                'Oppo',
+                'Vivo',
+                'Gionee',
+                'One Plus',
+                'Google Pixel',
+                'Honor',
+                'Huawei',
+                'Infinix',
+                'Realme',
+                'Tecno',
+                'Nothing',
+                'Xiaomi'
+            ]
+        };
+
+        // Initialize page with category parameters
+        function initializePage() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const category = urlParams.get('category') || 'Not specified';
+            const subcategory = urlParams.get('subcategory') || 'Not specified';
+
+            document.getElementById('primaryCategory').value = category;
+            document.getElementById('subCategory').value = subcategory;
+            document.getElementById('categoryBreadcrumb').textContent = subcategory;
+
+            // Show brand selector and populate brands if available
+            updateBrandSelector(category);
+        }
+
+        function updateBrandSelector(category) {
+            const brandSelectorContainer = document.getElementById('brandSelectorContainer');
+            const brandSelector = document.getElementById('brandSelector');
+            
+            // Only show brand selector for Mobile category
+            if (category === 'Mobile') {
+                brandSelectorContainer.style.display = 'block';
+                
+                // Get current selected value to preserve it
+                const currentValue = brandSelector.value;
+                
+                // Populate brand options
+                const brands = brandsByCategory[category] || [];
+                brandSelector.innerHTML = '<option value="">-- Select a Brand --</option>';
+                
+                brands.forEach(brand => {
+                    const option = document.createElement('option');
+                    option.value = brand;
+                    option.textContent = brand;
+                    brandSelector.appendChild(option);
+                });
+                
+                // Restore previous selection if it exists
+                if (currentValue) {
+                    brandSelector.value = currentValue;
+                }
+            } else {
+                brandSelectorContainer.style.display = 'none';
+            }
+        }
+
+        function previewPhotos(input) {
+            const container = document.getElementById('photoPreview');
+            const countDiv = document.getElementById('photoCount');
+            
+            uploadedFiles = [];
+            container.innerHTML = '';
+
+            if (input.files && input.files.length <= 5) {
+                Array.from(input.files).forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        uploadedFiles.push({
+                            name: file.name,
+                            size: file.size,
+                            data: e.target.result
+                        });
+
+                        const previewItem = document.createElement('div');
+                        previewItem.className = 'preview-item';
+                        previewItem.innerHTML = `
+                            <img src="${e.target.result}" alt="Preview">
+                            <button type="button" class="remove-btn" onclick="removePhoto(${index})">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        `;
+                        container.appendChild(previewItem);
+
+                        countDiv.textContent = `${uploadedFiles.length} of 5 photos uploaded`;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            } else if (input.files.length > 5) {
+                alert('Maximum 5 photos allowed');
+                input.value = '';
+            }
+        }
+
+        function removePhoto(index) {
+            uploadedFiles.splice(index, 1);
+            document.getElementById('fileInput').value = '';
+            document.getElementById('photoPreview').innerHTML = '';
+            document.getElementById('photoCount').textContent = `${uploadedFiles.length} of 5 photos uploaded`;
+        }
+
+        function handlePostAd(event) {
+            event.preventDefault();
+
+            const adTitle = document.getElementById('adTitle').value;
+            const price = document.getElementById('price').value;
+            const description = document.getElementById('description').value;
+            const brand = document.getElementById('brandSelector').value;
+
+            // Check if brand is required but not selected
+            const brandSelectorContainer = document.getElementById('brandSelectorContainer');
+            if (brandSelectorContainer.style.display !== 'none' && !brand) {
+                alert('Please select a brand/company');
+                return;
+            }
+
+            const btn = event.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Posting your ad...';
+            btn.disabled = true;
+
+            // Simulate API call
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+
+                // Show success message
+                const successDiv = document.getElementById('successMessage');
+                document.getElementById('successText').textContent = `✓ Your ad "${adTitle}" for $${price} has been posted successfully!`;
+                successDiv.classList.remove('d-none');
+                
+                // Scroll to top
+                window.scrollTo(0, 0);
+
+                // Redirect after delay
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 2500);
+            }, 1500);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>

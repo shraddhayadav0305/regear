@@ -1,0 +1,231 @@
+:root {
+    --primary-color: #002f34;
+    --secondary-color: #3a77ff;
+    --accent-color: #ffce32;
+    --bg-light: #f2f4f5;
+    --text-dark: #002f34;
+    --text-muted: #666;
+    --border-color: #e5e5e5;
+}
+
+/* ================================
+   GLOBAL
+================================ */
+body {
+    background-color: var(--bg-light);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text-dark);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+/* ================================
+   NAVBAR
+================================ */
+.navbar {
+    background-color: var(--primary-color) !important;
+    padding: 1rem 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.navbar-brand {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--accent-color) !important;
+}
+
+.nav-link {
+    color: rgba(255,255,255,0.9) !important;
+    font-weight: 600;
+    margin: 0 10px;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    color: var(--accent-color) !important;
+}
+
+/* ================================
+   HERO SECTION
+================================ */
+.hero-section {
+    background: linear-gradient(rgba(0,47,52,0.9), rgba(0,47,52,0.8)),
+        url("https://images.unsplash.com/photo-1518770660439-4636190af475");
+    background-size: cover;
+    background-position: center;
+    padding: 120px 0;
+    color: #fff;
+    margin-bottom: 4rem;
+}
+
+/* ================================
+   CATEGORY CARD
+================================ */
+.category-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    transition: 0.3s;
+    height: 100%;
+}
+
+.category-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+}
+
+.category-icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    color: var(--primary-color);
+}
+
+/* ================================
+   PRODUCT CARD (FIXED)
+================================ */
+.product-card {
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    transition: 0.3s;
+    height: 100%;
+    position: relative;
+}
+
+.product-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.15);
+}
+
+/* IMAGE FIX — IMPORTANT */
+.product-img-wrapper {
+    width: 100%;
+    height: 220px;              /* SAME HEIGHT FOR ALL */
+    background: #f5f5f5;
+    overflow: hidden;
+}
+
+.product-img-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;          /* NO STRETCH */
+    transition: transform 0.4s ease;
+}
+
+.product-card:hover img {
+    transform: scale(1.08);
+}
+
+/* BADGE */
+.card-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: var(--accent-color);
+    color: #000;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 20px;
+    z-index: 2;
+}
+
+/* LIKE BUTTON */
+.like-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #fff;
+    border: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    cursor: pointer;
+    z-index: 2;
+    color: #ccc;
+}
+
+.like-btn.active {
+    color: #ff4757;
+}
+
+/* PRODUCT INFO */
+.product-info {
+    padding: 18px;
+}
+
+.product-price {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--primary-color);
+}
+
+.product-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 8px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.product-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* ================================
+   AUTH PAGES
+================================ */
+.auth-container {
+    min-height: calc(100vh - 250px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.auth-card {
+    background: #fff;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    max-width: 500px;
+    width: 100%;
+}
+
+/* ================================
+   FOOTER
+================================ */
+footer {
+    background: var(--primary-color);
+    color: #fff;
+    padding: 60px 0 30px;
+    margin-top: auto;
+}
+
+.footer-link {
+    display: block;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 10px;
+}
+
+.footer-link:hover {
+    color: var(--accent-color);
+}

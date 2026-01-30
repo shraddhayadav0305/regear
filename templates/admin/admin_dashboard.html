@@ -1,0 +1,31 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block content %}
+
+<h2>Admin Dashboard</h2>
+<hr>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card p-3 shadow">
+            <h5>Total Users</h5>
+            <h2>{{ total_users }}</h2>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card p-3 shadow">
+            <h5>Buyers</h5>
+            <h2>{{ buyers }}</h2>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card p-3 shadow">
+            <h5>Sellers</h5>
+            <h2>{{ sellers }}</h2>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
