@@ -73,6 +73,7 @@
 
         <!-- LOGIN FORM -->
         <form id="loginForm" method="POST" action="/login">
+            <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
 
             <!-- EMAIL -->
             <div class="form-group mb-3">

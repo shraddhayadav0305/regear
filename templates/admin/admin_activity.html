@@ -1,0 +1,105 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Activity Logs - ReGear Admin{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h1 class="mb-3"><i class="fas fa-history"></i> Admin Activity Logs</h1>
+    <p class="text-light">Audit trail of all admin actions</p>
+</div>
+
+<!-- Activity Logs Table -->
+<div class="card">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-table"></i> Activity Logs ({{ total }})</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if logs %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Admin</th>
+                            <th>Action</th>
+                            <th>Description</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                            <tr>
+                                <td><strong>#{{ log.id }}</strong></td>
+                                <td>{{ log.username }}</td>
+                                <td>
+                                    {% if 'BLOCK' in log.action %}
+                                        <span class="badge bg-danger"><i class="fas fa-ban"></i> {{ log.action }}</span>
+                                    {% elif 'UNBLOCK' in log.action %}
+                                        <span class="badge bg-success"><i class="fas fa-check"></i> {{ log.action }}</span>
+                                    {% elif 'APPROVE' in log.action %}
+                                        <span class="badge bg-success"><i class="fas fa-check-circle"></i> {{ log.action }}</span>
+                                    {% elif 'REJECT' in log.action %}
+                                        <span class="badge bg-danger"><i class="fas fa-times-circle"></i> {{ log.action }}</span>
+                                    {% elif 'DELETE' in log.action %}
+                                        <span class="badge bg-danger"><i class="fas fa-trash"></i> {{ log.action }}</span>
+                                    {% elif 'COMPLAINT' in log.action %}
+                                        <span class="badge bg-warning"><i class="fas fa-flag"></i> {{ log.action }}</span>
+                                    {% else %}
+                                        <span class="badge bg-info"><i class="fas fa-cog"></i> {{ log.action }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.description[:80] }}{% if log.description|length > 80 %}...{% endif %}</td>
+                                <td>
+                                    <small>{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No activity logs found</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if current_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('admin.activity_logs', page=1) }}">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('admin.activity_logs', page=current_page-1) }}">Previous</a>
+                </li>
+            {% endif %}
+
+            {% for page_num in range(1, total_pages + 1) %}
+                {% if page_num == current_page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                {% elif page_num >= current_page - 2 and page_num <= current_page + 2 %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.activity_logs', page=page_num) }}">{{ page_num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if current_page < total_pages %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('admin.activity_logs', page=current_page+1) }}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('admin.activity_logs', page=total_pages) }}">Last</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+{% endif %}
+{% endblock %}

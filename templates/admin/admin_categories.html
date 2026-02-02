@@ -1,0 +1,132 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>📂 Categories Management</h1>
+        <a href="{{ url_for('categories.admin_create_category') }}" class="btn btn-success btn-lg">
+            <i class="fas fa-plus"></i> New Category
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'error' else 'info' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="table-responsive bg-white rounded shadow-sm">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Order</th>
+                    <th>Name</th>
+                    <th>Slug</th>
+                    <th>Icon</th>
+                    <th>Subcategories</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if categories %}
+                    {% for category in categories %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-primary">{{ category.display_order }}</span>
+                            </td>
+                            <td>
+                                <strong>{{ category.name }}</strong>
+                                {% if category.description %}
+                                    <br><small class="text-muted">{{ category.description[:60] }}...</small>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ category.slug }}</code></td>
+                            <td>
+                                <span style="font-size: 1.5rem;">{{ category.icon }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">
+                                    <i class="fas fa-folder-open"></i>
+                                    {% set subcat_count = [
+                                        ('Mobile Phones', 6),
+                                        ('Laptops & Computers', 6),
+                                        ('Computer Components', 6),
+                                        ('Storage Devices', 6),
+                                        ('Accessories', 5),
+                                        ('Gaming Equipment', 5),
+                                        ('Displays & Monitors', 6),
+                                        ('Office Electronics', 5),
+                                        ('Cameras & Photography', 6),
+                                        ('Networking Hardware', 5)
+                                    ] %}
+                                    {% for name, count in subcat_count %}
+                                        {% if name == category.name %}{{ count }}{% endif %}
+                                    {% endfor %}
+                                </span>
+                            </td>
+                            <td>
+                                {% if category.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ category.created_at.strftime('%Y-%m-%d') if category.created_at else 'N/A' }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('categories.admin_category_filters', category_id=category.id) }}" 
+                                       class="btn btn-sm btn-info" title="Manage Filters">
+                                        <i class="fas fa-sliders-h"></i>
+                                    </a>
+                                    <a href="{{ url_for('categories.admin_edit_category', category_id=category.id) }}" 
+                                       class="btn btn-sm btn-warning" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('categories.admin_delete_category', category_id=category.id) }}" 
+                                          style="display: inline;" onsubmit="return confirm('Delete this category?');">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox"></i> No categories found
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-4 p-3 bg-light rounded">
+        <h5><i class="fas fa-info-circle"></i> Total Categories: <strong>{{ categories|length }}</strong></h5>
+        <p class="mb-0 text-muted">Manage main product categories. Click on filters icon to manage category-specific filters.</p>
+    </div>
+</div>
+
+<style>
+    .table-hover tbody tr:hover {
+        background-color: #f5f5f5;
+    }
+    
+    code {
+        background-color: #f4f4f4;
+        padding: 3px 6px;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}

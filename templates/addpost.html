@@ -306,33 +306,7 @@
         </div>
     </div>
 
-    <!-- PROGRESS HEADER -->
-    <div class="progress-header">
-        <div class="container-lg">
-            <div class="progress-steps">
-                <div class="step completed">
-                    <div class="step-circle"><i class="fas fa-check"></i></div>
-                    <div class="step-label">Category</div>
-                </div>
-                <div class="step active">
-                    <div class="step-circle">2</div>
-                    <div class="step-label">Details</div>
-                </div>
-                <div class="step">
-                    <div class="step-circle">3</div>
-                    <div class="step-label">Photos</div>
-                </div>
-                <div class="step">
-                    <div class="step-circle">4</div>
-                    <div class="step-label">Price</div>
-                </div>
-                <div class="step">
-                    <div class="step-circle">5</div>
-                    <div class="step-label">Review</div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- PROGRESS HEADER removed as requested -->
 
     <!-- MAIN CONTENT -->
     <div class="container-lg">
@@ -344,7 +318,7 @@
                     <strong id="successText"></strong>
                 </div>
 
-                <form onsubmit="handlePostAd(event)" id="postAdForm">
+                <form id="postAdForm" method="POST" action="{{ url_for('post_ad_form') }}" enctype="multipart/form-data">
                     <!-- SECTION 1: CATEGORY & DETAILS -->
                     <div class="form-section">
                         <div class="section-title">
@@ -356,17 +330,19 @@
                             <div class="col-md-6">
                                 <label class="form-label">Primary Category</label>
                                 <input type="text" class="form-control" id="primaryCategory" disabled>
+                                <input type="hidden" name="category" id="categoryInput">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Sub Category</label>
                                 <input type="text" class="form-control" id="subCategory" disabled>
+                                <input type="hidden" name="subcategory" id="subcategoryInput">
                             </div>
                         </div>
 
                         <!-- BRAND/COMPANY SELECTOR -->
                         <div class="mb-4" id="brandSelectorContainer" style="display: none;">
                             <label class="form-label">Brand/Company <span style="color: #ff4444;">*</span></label>
-                            <select class="form-select" id="brandSelector" required>
+                            <select class="form-select" id="brandSelector" name="brand" required>
                                 <option value="">-- Select a Brand --</option>
                             </select>
                             <div class="form-text">Choose the brand/company of the product you're selling</div>
@@ -375,7 +351,7 @@
                         <!-- TITLE -->
                         <div class="mb-4">
                             <label class="form-label">Ad Title <span style="color: #ff4444;">*</span></label>
-                            <input type="text" class="form-control" id="adTitle" placeholder="e.g. iPhone 13 Pro Max 256GB - Excellent Condition" required maxlength="80">
+                            <input type="text" class="form-control" id="adTitle" name="title" placeholder="e.g. iPhone 13 Pro Max 256GB - Excellent Condition" required maxlength="80">
                             <div class="form-text">Be specific and include brand, model, and key features (Max 80 characters)</div>
                         </div>
 
@@ -413,7 +389,7 @@
                         <!-- DESCRIPTION -->
                         <div class="mb-4">
                             <label class="form-label">Description <span style="color: #ff4444;">*</span></label>
-                            <textarea class="form-control" id="description" rows="6" placeholder="Provide accurate details about your item:
+                            <textarea class="form-control" id="description" name="description" rows="6" placeholder="Provide accurate details about your item:
 - What's included (original box, accessories, charger, etc.)
 - Any defects or damage
 - How long you've owned it
@@ -430,12 +406,12 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label">Price (USD) <span style="color: #ff4444;">*</span></label>
+                            <label class="form-label">Price (INR) <span style="color: #ff4444;">*</span></label>
                             <div class="input-group">
-                                <span class="input-group-text" style="border: 2px solid #e8e8e8; border-right: none;">$</span>
-                                <input type="number" class="form-control" id="price" placeholder="0.00" step="0.01" min="1" required style="border: 2px solid #e8e8e8; border-left: none;">
+                                <span class="input-group-text" style="border: 2px solid #e8e8e8; border-right: none;">₹</span>
+                                <input type="number" class="form-control" id="price" name="price" placeholder="0" step="1" min="1" required style="border: 2px solid #e8e8e8; border-left: none;">
                             </div>
-                            <div class="form-text">Set a competitive price. You can negotiate with buyers.</div>
+                            <div class="form-text">Set a competitive price in Indian Rupees. You can negotiate with buyers.</div>
                         </div>
 
                         <div class="mb-4">
@@ -449,18 +425,18 @@
                     </div>
 
                     <!-- SECTION 3: PHOTOS -->
-                    <div class="form-section">
+                        <div class="form-section">
                         <div class="section-title">
-                            <i class="fas fa-images me-2" style="color: #0066cc;"></i>Upload Photos (Up to 5)
+                            <i class="fas fa-images me-2" style="color: #0066cc;"></i>Upload Photos (Up to 8)
                         </div>
 
                         <div class="photo-upload-area" onclick="document.getElementById('fileInput').click()">
                             <i class="fas fa-cloud-upload-alt"></i>
                             <p class="mb-2"><strong>Drag and drop photos here</strong></p>
                             <p class="form-text">or click to browse</p>
-                            <p class="form-text">Supported formats: JPG, PNG (Max 5 photos, 5MB each)</p>
+                            <p class="form-text">Supported formats: JPG, PNG (Max 8 photos, 5MB each)</p>
                         </div>
-                        <input type="file" id="fileInput" class="d-none" multiple accept="image/*" onchange="previewPhotos(this)">
+                        <input type="file" id="fileInput" name="photos" class="d-none" multiple accept="image/*" onchange="previewPhotos(this)">
 
                         <div id="photoPreview" class="photoPreview"></div>
                         <div id="photoCount" class="form-text mt-3"></div>
@@ -475,12 +451,25 @@
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <label class="form-label">Full Name</label>
-                                <input type="text" class="form-control" id="sellerName" value="User Name" disabled>
+                                <input type="text" class="form-control" id="sellerName" value="{{ session.get('username', 'User') }}" disabled>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Phone Number</label>
-                                <input type="tel" class="form-control" id="phone" value="+1 (555) 123-4567" required>
+                                <input type="tel" class="form-control" id="phone" name="phone" value="{{ session.get('phone', '') }}" required>
                                 <div class="form-text">Buyers will use this to contact you</div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" name="email" value="{{ session.get('email', '') }}">
+                                <div class="form-text">We will contact you via email if needed</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Location</label>
+                                <input type="text" class="form-control" id="location" name="location" value="{{ session.get('location', '') }}" placeholder="City, State">
+                                <div class="form-text">Provide your city or area</div>
                             </div>
                         </div>
                     </div>
@@ -532,10 +521,12 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let uploadedFiles = [];
+        // accumulator for files selected across multiple selects
+        let dtAccumulator = new DataTransfer();
 
         // Brand database - Only for Mobile category
         const brandsByCategory = {
-            'Mobile': [
+            'Mobiles': [
                 'Samsung',
                 'Nokia',
                 'Asus',
@@ -567,15 +558,31 @@
             ]
         };
 
-        // Initialize page with category parameters
+        // Initialize page with category parameters (from session context passed by server)
         function initializePage() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const category = urlParams.get('category') || 'Not specified';
-            const subcategory = urlParams.get('subcategory') || 'Not specified';
+            // Values injected by Flask when rendering the template
+            const injectedCategory = `{{ selected_category | e }}`.trim();
+            const injectedSubcategory = `{{ selected_subcategory | e }}`.trim();
 
-            document.getElementById('primaryCategory').value = category;
-            document.getElementById('subCategory').value = subcategory;
-            document.getElementById('categoryBreadcrumb').textContent = subcategory;
+            let category = injectedCategory || '';
+            let subcategory = injectedSubcategory || '';
+
+            if (!category) {
+                const urlParams = new URLSearchParams(window.location.search);
+                category = urlParams.get('category') || '';
+            }
+            if (!subcategory) {
+                const urlParams = new URLSearchParams(window.location.search);
+                subcategory = urlParams.get('subcategory') || '';
+            }
+
+            document.getElementById('primaryCategory').value = category || 'Not specified';
+            document.getElementById('subCategory').value = subcategory || 'Not specified';
+            document.getElementById('categoryBreadcrumb').textContent = subcategory || 'Post Ad';
+
+            // also populate hidden inputs for server submission
+            document.getElementById('categoryInput').value = category || '';
+            document.getElementById('subcategoryInput').value = subcategory || '';
 
             // Show brand selector and populate brands if available
             updateBrandSelector(category);
@@ -585,15 +592,15 @@
             const brandSelectorContainer = document.getElementById('brandSelectorContainer');
             const brandSelector = document.getElementById('brandSelector');
             
-            // Only show brand selector for Mobile category
-            if (category === 'Mobile') {
+            // Show brand selector for categories containing 'mobil'
+            if (category && category.toLowerCase().includes('mobil')) {
                 brandSelectorContainer.style.display = 'block';
                 
                 // Get current selected value to preserve it
                 const currentValue = brandSelector.value;
                 
                 // Populate brand options
-                const brands = brandsByCategory[category] || [];
+                const brands = brandsByCategory['Mobiles'] || [];
                 brandSelector.innerHTML = '<option value="">-- Select a Brand --</option>';
                 
                 brands.forEach(brand => {
@@ -615,90 +622,109 @@
         function previewPhotos(input) {
             const container = document.getElementById('photoPreview');
             const countDiv = document.getElementById('photoCount');
-            
-            uploadedFiles = [];
-            container.innerHTML = '';
+            const maxPhotos = 8;
 
-            if (input.files && input.files.length <= 5) {
-                Array.from(input.files).forEach((file, index) => {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        uploadedFiles.push({
-                            name: file.name,
-                            size: file.size,
-                            data: e.target.result
-                        });
+            const newFiles = input.files ? Array.from(input.files) : [];
 
-                        const previewItem = document.createElement('div');
-                        previewItem.className = 'preview-item';
-                        previewItem.innerHTML = `
-                            <img src="${e.target.result}" alt="Preview">
-                            <button type="button" class="remove-btn" onclick="removePhoto(${index})">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        `;
-                        container.appendChild(previewItem);
-
-                        countDiv.textContent = `${uploadedFiles.length} of 5 photos uploaded`;
-                    };
-                    reader.readAsDataURL(file);
-                });
-            } else if (input.files.length > 5) {
-                alert('Maximum 5 photos allowed');
-                input.value = '';
+            // add new files to accumulator up to maxPhotos
+            for (const f of newFiles) {
+                if (dtAccumulator.files.length >= maxPhotos) break;
+                dtAccumulator.items.add(f);
             }
+
+            // sync the real file input to accumulator
+            input.files = dtAccumulator.files;
+
+            // build previews from accumulator
+            container.innerHTML = '';
+            Array.from(dtAccumulator.files).forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'preview-item';
+                    previewItem.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview">
+                        <button type="button" class="remove-btn" data-index="${index}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewItem.querySelector('.remove-btn').addEventListener('click', function() {
+                        removePhoto(index);
+                    });
+                    container.appendChild(previewItem);
+                };
+                reader.readAsDataURL(file);
+            });
+
+            countDiv.textContent = `${dtAccumulator.files.length} of ${maxPhotos} photos selected`;
         }
 
         function removePhoto(index) {
-            uploadedFiles.splice(index, 1);
-            document.getElementById('fileInput').value = '';
-            document.getElementById('photoPreview').innerHTML = '';
-            document.getElementById('photoCount').textContent = `${uploadedFiles.length} of 5 photos uploaded`;
+            // create new DataTransfer without the removed file
+            const newDT = new DataTransfer();
+            Array.from(dtAccumulator.files).forEach((file, i) => {
+                if (i !== index) newDT.items.add(file);
+            });
+
+            dtAccumulator = newDT;
+
+            // sync to real file input and rebuild previews
+            const fileInput = document.getElementById('fileInput');
+            fileInput.files = dtAccumulator.files;
+            previewPhotos(fileInput);
         }
 
+        // Validate form and allow native submission
         function handlePostAd(event) {
-            event.preventDefault();
-
-            const adTitle = document.getElementById('adTitle').value;
-            const price = document.getElementById('price').value;
-            const description = document.getElementById('description').value;
+            const brandSelectorContainer = document.getElementById('brandSelectorContainer');
             const brand = document.getElementById('brandSelector').value;
 
-            // Check if brand is required but not selected
-            const brandSelectorContainer = document.getElementById('brandSelectorContainer');
             if (brandSelectorContainer.style.display !== 'none' && !brand) {
+                event.preventDefault();
                 alert('Please select a brand/company');
-                return;
+                return false;
             }
 
-            const btn = event.target.querySelector('button[type="submit"]');
-            const originalText = btn.innerHTML;
-            
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Posting your ad...';
-            btn.disabled = true;
+            // copy visible category values to hidden inputs just before submit
+            const cat = document.getElementById('primaryCategory').value || '';
+            const sub = document.getElementById('subCategory').value || '';
+            document.getElementById('categoryInput').value = cat;
+            document.getElementById('subcategoryInput').value = sub;
+            // ensure file input is synced with accumulator (for browsers that allow it)
+            const fileInput = document.getElementById('fileInput');
+            try {
+                fileInput.files = dtAccumulator.files;
+            } catch (e) {
+                // some browsers restrict assigning files; proceed anyway
+                console.warn('Could not sync files to input:', e);
+            }
 
-            // Simulate API call
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+            // require at least one photo client-side
+            if (!dtAccumulator || dtAccumulator.files.length === 0) {
+                event.preventDefault();
+                alert('Please upload at least one image (JPG/PNG) before posting your ad.');
+                return false;
+            }
 
-                // Show success message
-                const successDiv = document.getElementById('successMessage');
-                document.getElementById('successText').textContent = `✓ Your ad "${adTitle}" for $${price} has been posted successfully!`;
-                successDiv.classList.remove('d-none');
-                
-                // Scroll to top
-                window.scrollTo(0, 0);
+            // Debug log to help diagnose non-submission
+            console.log('Submitting Post Ad form, files:', dtAccumulator.files.length);
 
-                // Redirect after delay
-                setTimeout(() => {
-                    window.location.href = 'dashboard.html';
-                }, 2500);
-            }, 1500);
+            // disable submit button to prevent double-submits and show loading
+            const submitBtn = document.querySelector('#postAdForm button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Posting...';
+            }
+
+            // allow native form submission to server
+            return true;
         }
 
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', initializePage);
+        // Initialize on page load and wire native submit validation
+        document.addEventListener('DOMContentLoaded', () => {
+            initializePage();
+            document.getElementById('postAdForm').addEventListener('submit', handlePostAd);
+        });
     </script>
 </body>
 </html>

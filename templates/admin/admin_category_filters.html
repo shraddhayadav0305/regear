@@ -1,0 +1,174 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="mb-4">
+        <h1>🎛️ Manage Filters for: <strong>{{ category.name }}</strong></h1>
+        <p class="text-muted">Assign and configure filters that will appear when users create listings in this category</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for cat, message in messages %}
+                <div class="alert alert-{{ 'success' if cat == 'success' else 'danger' if cat == 'error' else 'info' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- Assigned Filters -->
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-check-circle"></i> Assigned Filters ({{ assigned_filters|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if assigned_filters %}
+                        <div class="list-group" id="assignedFiltersList">
+                            {% for af in assigned_filters %}
+                                <div class="list-group-item d-flex justify-content-between align-items-center" data-filter-id="{{ af.id }}">
+                                    <div>
+                                        <h6 class="mb-1">{{ af.name }}</h6>
+                                        <small class="text-muted">
+                                            <span class="badge bg-secondary">{{ af.type }}</span>
+                                            {% if af.is_required %}
+                                                <span class="badge bg-danger">Required</span>
+                                            {% endif %}
+                                            Order: {{ af.display_order }}
+                                        </small>
+                                    </div>
+                                    <button class="btn btn-sm btn-danger" onclick="removeFilter({{ af.id }}, '{{ af.name }}')">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-circle"></i> No filters assigned yet
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Filter Form -->
+        <div class="col-md-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Assign New Filter</h5>
+                </div>
+                <div class="card-body">
+                    <form id="assignFilterForm">
+                        <input type="hidden" name="category_id" value="{{ category.id }}">
+
+                        <div class="mb-3">
+                            <label class="form-label">Select Filter Type *</label>
+                            <select name="filter_type_id" class="form-select" required id="filterTypeSelect">
+                                <option value="">-- Choose Filter --</option>
+                                {% for af in all_filters %}
+                                    {% set already_assigned = af.id in [a.filter_id for a in assigned_filters] %}
+                                    <option value="{{ af.id }}" {% if already_assigned %}disabled{% endif %}>
+                                        {{ af.name }} ({{ af.type }})
+                                        {% if already_assigned %}- Already Assigned{% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Only unassigned filters are shown</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Display Order</label>
+                            <input type="number" name="display_order" class="form-control" value="0" min="0">
+                            <small class="text-muted">Lower numbers appear first in listing form</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_required" value="1" id="isRequired">
+                                <label class="form-check-label" for="isRequired">
+                                    Make this filter required
+                                </label>
+                            </div>
+                            <small class="text-muted">Required filters must be filled when creating listings</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-plus"></i> Assign Filter
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Info Box -->
+            <div class="card mt-3 bg-light border-info">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="fas fa-lightbulb"></i> Tips</h6>
+                    <ul class="mb-0 small">
+                        <li>Common filters apply to all categories</li>
+                        <li>Category-specific filters enhance filtering</li>
+                        <li>Mark important filters as required</li>
+                        <li>Organize by display order</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function removeFilter(filterId, filterName) {
+    if (confirm(`Remove "${filterName}" from this category?`)) {
+        fetch(`{{ url_for('categories.admin_remove_filter', category_filter_id='REPLACE') }}`.replace('REPLACE', filterId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.querySelector(`[data-filter-id="${filterId}"]`).remove();
+                location.reload(); // Refresh to update available filters
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+}
+
+document.getElementById('assignFilterForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = {
+        category_id: parseInt(formData.get('category_id')),
+        filter_type_id: parseInt(formData.get('filter_type_id')),
+        is_required: formData.get('is_required') ? 1 : 0,
+        display_order: parseInt(formData.get('display_order'))
+    };
+
+    fetch('{{ url_for("categories.admin_assign_filter") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Filter assigned successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => console.error('Error:', error));
+});
+</script>
+{% endblock %}

@@ -231,7 +231,7 @@
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container-lg">
-            <a class="navbar-brand" href="homepg.html">
+            <a class="navbar-brand" href="/">
                 <i class="fas fa-recycle me-2"></i>ReGear
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -240,13 +240,13 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="homepg.html">Home</a>
+                        <a class="nav-link" href="/">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="categories.html">Sell</a>
+                        <a class="nav-link active" href="/sell">Sell</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="dashboard.html">Dashboard</a>
+                        <a class="nav-link" href="/dashboard">Dashboard</a>
                     </li>
                 </ul>
             </div>
@@ -258,9 +258,9 @@
         <div class="container-lg">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="homepg.html">Home</a></li>
-                    <li class="breadcrumb-item"><a href="categories.html">Sell</a></li>
-                    <li class="breadcrumb-item active" id="categoryBreadcrumb">Categories</li>
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/sell">Sell</a></li>
+                    <li class="breadcrumb-item active">{{ category }}</li>
                 </ol>
             </nav>
         </div>
@@ -268,18 +268,26 @@
 
     <!-- MAIN CONTENT -->
     <div class="container-lg">
-        <a href="categories.html" class="back-link">
+        <a href="/sell" class="back-link">
             <i class="fas fa-arrow-left"></i>Back to Categories
         </a>
 
         <!-- PAGE HEADER -->
         <div class="page-header">
-            <h1 id="mainTitle">Choose a Subcategory</h1>
-            <p id="mainDescription">Select the specific item you want to sell</p>
+            <h1>{{ category }}</h1>
+            <p>Choose a subcategory to post your item</p>
         </div>
 
         <!-- SUBCATEGORIES GRID -->
-        <div id="subcategoriesContainer"></div>
+        <div class="subcategories-container">
+            {% for subcategory in subcategories %}
+            <div class="subcategory-card" onclick="selectSubcategory('{{ category }}', '{{ subcategory }}')">
+                <i class="fas fa-tag subcat-icon"></i>
+                <div class="subcat-name">{{ subcategory }}</div>
+                <p class="subcat-desc">Click to post</p>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 
     <!-- FOOTER -->
@@ -314,154 +322,33 @@
     <!-- SCRIPTS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Subcategories data structure
-        const subcategoriesData = {
-            'Electronics': {
-                title: 'Electronics',
-                description: 'Choose the electronics item you want to sell',
-                subcategories: [
-                    { name: 'Mobile Phones', icon: 'fas fa-mobile-alt' },
-                    { name: 'Tablets', icon: 'fas fa-tablet-alt' },
-                    { name: 'Laptops', icon: 'fas fa-laptop' },
-                    { name: 'Desktops', icon: 'fas fa-desktop' },
-                    { name: 'Cameras', icon: 'fas fa-camera' },
-                    { name: 'Headphones', icon: 'fas fa-headphones' },
-                    { name: 'Smartwatches', icon: 'fas fa-watch' },
-                    { name: 'Accessories', icon: 'fas fa-plug' }
-                ]
-            },
-            'Mobile': {
-                title: 'Mobile Phones & Accessories',
-                description: 'Choose from mobile phones, tablets, and accessories',
-                subcategories: [
-                    { name: 'Mobile Phones', icon: 'fas fa-mobile-alt' },
-                    { name: 'Mobile Phone Accessories', icon: 'fas fa-mobile-alt' },
-                    { name: 'Tablets', icon: 'fas fa-tablet-alt' },
-                    { name: 'Chargers & Cables', icon: 'fas fa-plug' },
-                    { name: 'Covers & Cases', icon: 'fas fa-shield-alt' },
-                    { name: 'Screen Protectors', icon: 'fas fa-rectangle' },
-                    { name: 'Power Banks', icon: 'fas fa-battery-full' },
-                    { name: 'Phone Holders', icon: 'fas fa-hand-holding' }
-                ]
-            },
-            'Appliances': {
-                title: 'Home Appliances',
-                description: 'Select the appliance category you want to sell',
-                subcategories: [
-                    { name: 'TVs', icon: 'fas fa-tv' },
-                    { name: 'Video - Audio', icon: 'fas fa-volume-up' },
-                    { name: 'Kitchen & Other Appliances', icon: 'fas fa-utensils' },
-                    { name: 'Fridges', icon: 'fas fa-snowflake' },
-                    { name: 'Washing Machines', icon: 'fas fa-water' },
-                    { name: 'ACs', icon: 'fas fa-wind' },
-                    { name: 'Microwaves', icon: 'fas fa-microwave' },
-                    { name: 'Ovens', icon: 'fas fa-oven' }
-                ]
-            },
-            'Computers': {
-                title: 'Computers & Laptops',
-                description: 'Choose the computer item you want to sell',
-                subcategories: [
-                    { name: 'Laptops', icon: 'fas fa-laptop' },
-                    { name: 'Desktops', icon: 'fas fa-desktop' },
-                    { name: 'Computer Accessories', icon: 'fas fa-keyboard' },
-                    { name: 'Hard Disks, Printers & Monitors', icon: 'fas fa-hdd' },
-                    { name: 'Graphics Cards', icon: 'fas fa-microchip' },
-                    { name: 'Processors', icon: 'fas fa-microchip' },
-                    { name: 'RAM', icon: 'fas fa-memory' },
-                    { name: 'Motherboards', icon: 'fas fa-microchip' }
-                ]
-            },
-            'Cameras': {
-                title: 'Cameras & Lenses',
-                description: 'Select the camera equipment you want to sell',
-                subcategories: [
-                    { name: 'DSLR Cameras', icon: 'fas fa-camera' },
-                    { name: 'Mirrorless Cameras', icon: 'fas fa-camera' },
-                    { name: 'Compact Cameras', icon: 'fas fa-camera' },
-                    { name: 'Lenses', icon: 'fas fa-ring' },
-                    { name: 'Tripods & Stands', icon: 'fas fa-gopuram' },
-                    { name: 'Camera Bags', icon: 'fas fa-bag-shopping' },
-                    { name: 'Lighting Equipment', icon: 'fas fa-lightbulb' },
-                    { name: 'Memory Cards', icon: 'fas fa-sd-card' }
-                ]
-            },
-            'Games': {
-                title: 'Games & Entertainment',
-                description: 'Choose the gaming item you want to sell',
-                subcategories: [
-                    { name: 'Gaming Consoles', icon: 'fas fa-gamepad' },
-                    { name: 'Games & Software', icon: 'fas fa-compact-disc' },
-                    { name: 'Gaming Accessories', icon: 'fas fa-joystick' },
-                    { name: 'Gaming Laptops', icon: 'fas fa-laptop' },
-                    { name: 'Gaming Headsets', icon: 'fas fa-headphones' },
-                    { name: 'Gaming Keyboards', icon: 'fas fa-keyboard' },
-                    { name: 'Gaming Mice', icon: 'fas fa-mouse' },
-                    { name: 'Gaming Chairs', icon: 'fas fa-chair' }
-                ]
-            },
-            'Audio': {
-                title: 'Audio Equipment',
-                description: 'Select the audio equipment you want to sell',
-                subcategories: [
-                    { name: 'Headphones', icon: 'fas fa-headphones' },
-                    { name: 'Earbuds', icon: 'fas fa-headphones' },
-                    { name: 'Speakers', icon: 'fas fa-speaker' },
-                    { name: 'Amplifiers', icon: 'fas fa-volume-up' },
-                    { name: 'Microphones', icon: 'fas fa-microphone' },
-                    { name: 'Audio Cables', icon: 'fas fa-plug' },
-                    { name: 'Audio Interfaces', icon: 'fas fa-sliders-h' },
-                    { name: 'Studio Monitors', icon: 'fas fa-speaker' }
-                ]
-            }
-        };
-
-        // Initialize page
-        function initializePage() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const category = urlParams.get('category');
-
-            if (!category || !subcategoriesData[category]) {
-                window.location.href = 'categories.html';
-                return;
-            }
-
-            const data = subcategoriesData[category];
-            document.getElementById('mainTitle').textContent = data.title;
-            document.getElementById('mainDescription').textContent = data.description;
-            document.getElementById('categoryBreadcrumb').textContent = category;
-
-            renderSubcategories(data.subcategories, category);
-        }
-
-        function renderSubcategories(subcategories, parentCategory) {
-            const container = document.getElementById('subcategoriesContainer');
-            container.innerHTML = '';
-
-            const grid = document.createElement('div');
-            grid.className = 'subcategories-container';
-
-            subcategories.forEach(subcat => {
-                const card = document.createElement('div');
-                card.className = 'subcategory-card';
-                card.innerHTML = `
-                    <i class="${subcat.icon} subcat-icon"></i>
-                    <div class="subcat-name">${subcat.name}</div>
-                    <p class="subcat-desc">Click to post</p>
-                `;
-                card.onclick = () => goToAddPost(parentCategory, subcat.name);
-                grid.appendChild(card);
+        function selectSubcategory(category, subcategory) {
+            // Save category and subcategory to session via API
+            fetch('/save-category', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    category: category,
+                    subcategory: subcategory
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Redirect to post ad form
+                    window.location.href = data.redirect;
+                } else {
+                    alert('Please login first');
+                    window.location.href = '/login';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
             });
-
-            container.appendChild(grid);
         }
-
-        function goToAddPost(category, subcategory) {
-            window.location.href = `addpost.html?category=${encodeURIComponent(category)}&subcategory=${encodeURIComponent(subcategory)}`;
-        }
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', initializePage);
     </script>
 </body>
 </html>

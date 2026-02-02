@@ -1,0 +1,91 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        {% if mode == 'create' %}
+                            <i class="fas fa-plus"></i> Create New Sub-Category
+                        {% else %}
+                            <i class="fas fa-edit"></i> Edit Sub-Category
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="needs-validation">
+                        <div class="mb-3">
+                            <label class="form-label">Parent Category *</label>
+                            <select name="category_id" class="form-select" required>
+                                <option value="">-- Select Category --</option>
+                                {% for cat in categories %}
+                                    <option value="{{ cat.id }}" 
+                                            {% if mode == 'edit' and cat.id == subcategory.category_id %}selected{% endif %}>
+                                        {{ cat.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Sub-Category Name *</label>
+                            <input type="text" name="name" class="form-control" required 
+                                   value="{{ subcategory.name if subcategory else '' }}"
+                                   placeholder="e.g., Apple iPhone">
+                            <small class="text-muted">The display name for this sub-category</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Slug (URL-friendly) *</label>
+                            <input type="text" name="slug" class="form-control" required 
+                                   value="{{ subcategory.slug if subcategory else '' }}"
+                                   placeholder="e.g., apple-iphone"
+                                   pattern="[a-z0-9-]+"
+                                   title="Only lowercase letters, numbers, and hyphens">
+                            <small class="text-muted">Used for URLs and filtering</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="3"
+                                      placeholder="Brief description">{{ subcategory.description if subcategory else '' }}</textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Display Order</label>
+                            <input type="number" name="display_order" class="form-control" 
+                                   value="{{ subcategory.display_order if subcategory else '0' }}" min="0">
+                            <small class="text-muted">Lower numbers appear first within category</small>
+                        </div>
+
+                        {% if mode == 'edit' %}
+                            <div class="mb-3">
+                                <label class="form-label">Status</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="is_active" value="1" id="isActive"
+                                           {% if subcategory.is_active %}checked{% endif %}>
+                                    <label class="form-check-label" for="isActive">
+                                        Active (visible to users)
+                                    </label>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('categories.admin_list_subcategories') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> 
+                                {% if mode == 'create' %}Create Sub-Category{% else %}Update Sub-Category{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "dashboard.html" %}
+
+{% block title %}My Ads - ReGear{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>My Ads</h2>
+    <div class="row">
+        {% if listings %}
+            {% for ad in listings %}
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="row g-0">
+                        <div class="col-4">
+                            {% set img = (ad.photos.split(',')[0] if ad.photos else '') %}
+                            {% if img %}
+                                <img src="/{{ img }}" class="img-fluid rounded-start" alt="{{ ad.title }}">
+                            {% else %}
+                                <img src="/static/css/placeholder.png" class="img-fluid rounded-start" alt="No image">
+                            {% endif %}
+                        </div>
+                        <div class="col-8">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ ad.title }}</h5>
+                                <p class="card-text">₹{{ ad.price }}</p>
+                                <p class="card-text"><small class="text-muted">{{ ad.category }} · {{ ad.subcategory }}</small></p>
+                                <p class="card-text">
+                                    {% if ad.approval_status == 'pending' %}
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                    {% elif ad.approval_status == 'approved' %}
+                                        <span class="badge bg-success">Approved</span>
+                                    {% elif ad.approval_status == 'rejected' %}
+                                        <span class="badge bg-danger">Rejected</span>
+                                    {% elif ad.approval_status == 'sold' %}
+                                        <span class="badge bg-secondary">Sold</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ ad.approval_status }}</span>
+                                    {% endif %}
+                                </p>
+                                <a href="/listing/{{ ad.id }}" class="btn btn-sm btn-primary">View</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <p>You have no ads yet. <a href="{{ url_for('post_ad_form') }}">Post your first ad</a>.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

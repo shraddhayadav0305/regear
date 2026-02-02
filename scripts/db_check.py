@@ -1,0 +1,10 @@
+import mysql.connector
+c=mysql.connector.connect(host='localhost',user='root',password='Shra@0303',database='regear_db')
+cur=c.cursor()
+cur.execute('SELECT COUNT(*) FROM categories')
+print('categories:',cur.fetchone()[0])
+cur.execute('SELECT COUNT(*) FROM sub_categories')
+print('sub_categories:',cur.fetchone()[0])
+cur.execute('SELECT name FROM categories ORDER BY display_order LIMIT 5')
+print('sample:', [r[0] for r in cur.fetchall()])
+cur.close(); c.close()
