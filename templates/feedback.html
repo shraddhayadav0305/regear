@@ -14,21 +14,13 @@
     <!-- Custom CSS -->
     <link href="css/style.css" rel="stylesheet">
 </head>
-<script>
-function submitFeedback() {
-    alert(" Thank you! Your feedback has been submitted successfully.");
-
-    // Optional: clear form after submission
-    document.querySelector("form").reset();
-}
-</script>
 
 <body>
 
 <!-- NAVBAR -->
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
     <div class="container">
-        <a class="navbar-brand" href="index.html">
+        <a class="navbar-brand" href="{{ url_for('home') }}">
             <i class="fas fa-recycle me-2"></i>ReGear
         </a>
 
@@ -38,8 +30,8 @@ function submitFeedback() {
 
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
-                <li class="nav-item"><a class="nav-link active" href="feedback.html">Feedback</a></li>
+                <li class="nav-item"><a class="nav-link" href="{{ url_for('home') }}">Home</a></li>
+                <li class="nav-item"><a class="nav-link active" href="{{ url_for('feedback') }}">Feedback</a></li>
                 <li class="nav-item"><a class="nav-link" href="#">About Us</a></li>
             </ul>
 
@@ -66,38 +58,46 @@ function submitFeedback() {
                         Share your experience with ReGear. Your feedback helps us improve.
                     </p>
 
-                    <form>
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} mb-3" role="alert">
+                                    {{ message }}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" action="{{ url_for('feedback') }}">
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Your Name</label>
-                            <input type="text" class="form-control" placeholder="Enter your name">
+                            <input type="text" class="form-control" name="name" placeholder="Enter your name" required>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Email Address</label>
-                            <input type="email" class="form-control" placeholder="Enter your email">
+                            <input type="email" class="form-control" name="email" placeholder="Enter your email" required>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Feedback Type</label>
-                            <select class="form-select">
-                                <option selected disabled>Select feedback type</option>
-                                <option>Bug Report</option>
-                                <option>Feature Request</option>
-                                <option>General Feedback</option>
-                                <option>Complaint</option>
+                            <select class="form-select" name="feedback_type" required>
+                                <option value="" selected disabled>Select feedback type</option>
+                                <option value="Bug Report">Bug Report</option>
+                                <option value="Feature Request">Feature Request</option>
+                                <option value="General Feedback">General Feedback</option>
+                                <option value="Complaint">Complaint</option>
                             </select>
                         </div>
 
                         <div class="mb-4">
                             <label class="form-label fw-semibold">Your Message</label>
-                            <textarea class="form-control" rows="4" placeholder="Write your feedback here..."></textarea>
+                            <textarea class="form-control" rows="4" name="message" placeholder="Write your feedback here..." required></textarea>
                         </div>
 
                         <div class="d-grid">
-                            <button type="button" class="btn btn-warning fw-bold py-2" onclick="submitFeedback()">
-                            Submit Feedback
-                            </button>
+                            <button type="submit" class="btn btn-warning fw-bold py-2">Submit Feedback</button>
                         </div>
 
                     </form>
@@ -131,7 +131,7 @@ function submitFeedback() {
             <div class="col-lg-2 col-md-6">
                 <h5 class="mb-4 text-white">Quick Links</h5>
                 <a href="#" class="footer-link">About Us</a>
-                <a href="feedback.html" class="footer-link">Contact</a>
+                <a href="{{ url_for('feedback') }}" class="footer-link">Contact</a>
                 <a href="#" class="footer-link">Careers</a>
                 <a href="#" class="footer-link">Blog</a>
             </div>

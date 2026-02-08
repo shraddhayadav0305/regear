@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Create listings table and complaints table properly"""
 
+import os
 import mysql.connector
 
 DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'Shra@0303',
-    'database': 'regear_db'
+    'host': os.environ.get("REGEAR_DB_HOST", "localhost"),
+    'user': os.environ.get("REGEAR_DB_USER", "root"),
+    'password': os.environ.get("REGEAR_DB_PASSWORD", "Shra@0303"),
+    'database': os.environ.get("REGEAR_DB_NAME", "regear_db"),
 }
 
 print("🔄 Setting up database tables...\n")
@@ -101,6 +102,29 @@ try:
             print("⊘ complaints table already exists")
         else:
             raise
+
+    # Create feedback table
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NULL,
+                name VARCHAR(150) NOT NULL,
+                email VARCHAR(150) NOT NULL,
+                feedback_type VARCHAR(100) NOT NULL,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                INDEX idx_feedback_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        conn.commit()
+        print("✅ feedback table ready")
+    except Exception as e:
+        if "already exists" in str(e):
+            print("⊘ feedback table already exists")
+        else:
+            raise
     
     cursor.close()
     conn.close()
@@ -110,4 +134,3 @@ except Exception as e:
     print(f"❌ Error: {e}")
     import traceback
     traceback.print_exc()
-
