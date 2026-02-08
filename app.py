@@ -1,4 +1,3 @@
-from flask import Flask, render_template, request, redirect, session, flash, url_for
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 import mysql.connector
 from mysql.connector import Error as MySQLError
@@ -14,9 +13,16 @@ from routes.admin import admin_bp
 from routes.categories import categories_bp
 
 app = Flask(__name__, template_folder='templates')
-app.secret_key = "regear_secret_key_secure"
+app.secret_key = os.environ.get("REGEAR_SECRET_KEY", "regear_secret_key_secure")
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_TYPE'] = 'filesystem'
+
+DB_CONFIG = {
+    "host": os.environ.get("REGEAR_DB_HOST", "localhost"),
+    "user": os.environ.get("REGEAR_DB_USER", "root"),
+    "password": os.environ.get("REGEAR_DB_PASSWORD", "Shra@0303"),
+    "database": os.environ.get("REGEAR_DB_NAME", "regear_db"),
+}
 
 # Register admin blueprint
 app.register_blueprint(admin_bp)
@@ -40,19 +46,16 @@ def verify_password(stored_hash, password):
 
 
 # Database connection
-try:
-  def get_db_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Shra@0303",
-        database="regear_db"
-    
-    )
-    print("✅ Database connected successfully!")
-except MySQLError as e:
-    print(f"❌ Database connection failed: {e}")
-    db = None
+def get_db_connection():
+    return mysql.connector.connect(**DB_CONFIG)
+
+def is_database_available():
+    try:
+        conn = get_db_connection()
+        conn.close()
+        return True
+    except MySQLError:
+        return False
 
 # Login required decorator
 def login_required(f):
@@ -82,6 +85,39 @@ def admin_required(f):
 @app.route("/")
 def home():
     return render_template("homepg.html")
+
+@app.route("/feedback", methods=["GET", "POST"])
+def feedback():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip()
+        feedback_type = request.form.get("feedback_type", "").strip()
+        message = request.form.get("message", "").strip()
+
+        if not name or not email or not feedback_type or not message:
+            flash("❌ Please complete all feedback fields.", "error")
+            return redirect(url_for("feedback"))
+
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO feedback (user_id, name, email, feedback_type, message, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (session.get("user_id"), name, email, feedback_type, message, datetime.now()),
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+            flash("✅ Thanks for your feedback! We appreciate your help.", "success")
+            return redirect(url_for("feedback"))
+        except Exception as e:
+            flash(f"❌ Error submitting feedback: {str(e)}", "error")
+            return redirect(url_for("feedback"))
+
+    return render_template("feedback.html")
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -139,13 +175,7 @@ def login():
         password = request.form.get("password")
 
         try:
-            conn = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="Shra@0303",
-                database="regear_db"
-            )
-
+            conn = get_db_connection()
             cursor = conn.cursor()
 
             cursor.execute(
@@ -229,17 +259,16 @@ def reset_password():
     if request.method == "POST":
         new_password = request.form.get("password")
 
-        conn = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="Shra@0303",
-            database="regear_db"
-        )
+        if not new_password or len(new_password) < 6:
+            flash("❌ Password must be at least 6 characters")
+            return redirect(url_for("reset_password"))
+
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         cursor.execute(
             "UPDATE users SET password=%s WHERE email=%s",
-            (new_password, session["reset_email"])
+            (hash_password(new_password), session["reset_email"])
         )
 
         conn.commit()
@@ -277,7 +306,7 @@ def health():
     return jsonify({
         "status": "ok",
         "message": "ReGear server is running",
-        "database": "connected" if db else "disconnected"
+        "database": "connected" if is_database_available() else "disconnected"
     })
 
 @app.route("/api/reverse-geocode")

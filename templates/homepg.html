@@ -696,7 +696,7 @@
         <div class="nav-links">
             <a href="/login"><i class="fas fa-user"></i> Login</a>
             <a href="/register"><i class="fas fa-user-plus"></i> Register</a>
-            <a href="feedback.html"><i class="fas fa-comment"></i> Help & Support</a>
+            <a href="{{ url_for('feedback') }}"><i class="fas fa-comment"></i> Help & Support</a>
         </div>
     </div>
 </div>
@@ -903,7 +903,7 @@
                 <a href="homepg.html">Home</a>
                 <a href="dashboard.html">Browse All Items</a>
                 <a href="categories.html">Sell Item</a>
-                <a href="feedback.html">Feedback</a>
+                <a href="{{ url_for('feedback') }}">Feedback</a>
             </div>
 
             <div class="col-md-3 col-sm-6 mb-4">
@@ -917,7 +917,7 @@
 
             <div class="col-md-3 col-sm-6 mb-4">
                 <h5>Support</h5>
-                <a href="feedback.html">Help Center</a>
+                <a href="{{ url_for('feedback') }}">Help Center</a>
                 <a href="chat.html">Contact Us</a>
                 <a href="#">Safety Tips</a>
                 <a href="#">Privacy Policy</a>
@@ -1460,4 +1460,3 @@
 
 </body>
 </html>
-

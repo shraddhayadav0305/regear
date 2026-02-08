@@ -5,6 +5,7 @@ Handles category CRUD operations, filter management, and API endpoints
 
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, session
 from functools import wraps
+import os
 import mysql.connector
 from datetime import datetime
 
@@ -12,13 +13,15 @@ from datetime import datetime
 categories_bp = Blueprint('categories', __name__, url_prefix='/categories')
 
 # Database connection helper
+DB_CONFIG = {
+    "host": os.environ.get("REGEAR_DB_HOST", "localhost"),
+    "user": os.environ.get("REGEAR_DB_USER", "root"),
+    "password": os.environ.get("REGEAR_DB_PASSWORD", "Shra@0303"),
+    "database": os.environ.get("REGEAR_DB_NAME", "regear_db"),
+}
+
 def get_db_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Shra@0303",
-        database="regear_db"
-    )
+    return mysql.connector.connect(**DB_CONFIG)
 
 # Decorators
 def login_required(f):

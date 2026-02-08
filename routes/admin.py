@@ -4,6 +4,7 @@ Handles all admin functionality: users, products, complaints, analytics
 """
 
 from flask import Blueprint, render_template, request, redirect, session, flash, url_for, jsonify
+import os
 import mysql.connector
 from datetime import datetime, timedelta
 import json
@@ -11,14 +12,16 @@ import json
 # Admin Blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
+DB_CONFIG = {
+    "host": os.environ.get("REGEAR_DB_HOST", "localhost"),
+    "user": os.environ.get("REGEAR_DB_USER", "root"),
+    "password": os.environ.get("REGEAR_DB_PASSWORD", "Shra@0303"),
+    "database": os.environ.get("REGEAR_DB_NAME", "regear_db"),
+}
+
 def get_db_connection():
     """Get database connection"""
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Shra@0303",
-        database="regear_db"
-    )
+    return mysql.connector.connect(**DB_CONFIG)
 
 def admin_required(f):
     """Decorator to require admin access"""
