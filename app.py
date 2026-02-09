@@ -417,8 +417,8 @@ def get_categories():
 
 @app.route("/sell")
 def sell():
-    """Show combined category & subcategory selection page for selling items"""
-    return render_template("categories_combined.html")
+    """Show category selection page for selling items"""
+    return render_template("categories.html")
 
 @app.route("/subcategories")
 def subcategories():
@@ -629,7 +629,7 @@ def post_ad_form():
             cursor.close()
             conn.close()
 
-            flash("Your ad has been submitted and is under admin review.", "success")
+            flash("✅ Your ad has been submitted successfully! It's now pending admin review. Once approved, it will be published on the website.", "success")
             return redirect(url_for("my_listings"))
             
         except Exception as e:
@@ -652,7 +652,7 @@ def my_listings():
         cursor = conn.cursor(dictionary=True)
         
         cursor.execute("""
-            SELECT id, title, category, price, status, created_at 
+            SELECT id, title, category, subcategory, price, status, approval_status, created_at, photos
             FROM listings 
             WHERE user_id=%s 
             ORDER BY created_at DESC
@@ -676,10 +676,11 @@ def browse():
         cursor = conn.cursor(dictionary=True)
         
         cursor.execute("""
-            SELECT id, title, category, subcategory, price, location, created_at 
-            FROM listings 
-            WHERE approval_status='approved'
-            ORDER BY created_at DESC
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
+            FROM listings l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.approval_status='approved'
+            ORDER BY l.created_at DESC
         """)
         
         listings = cursor.fetchall()

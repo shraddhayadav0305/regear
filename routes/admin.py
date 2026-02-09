@@ -348,7 +348,7 @@ def manage_products():
 
         # Get paginated results
         offset = (page - 1) * items_per_page
-        select_query = base_select + where_sql + " ORDER BY l.created_at DESC LIMIT %s OFFSET %s"
+        select_query = base_select + where_sql + " ORDER BY FIELD(l.approval_status, 'pending', 'rejected', 'approved', 'sold'), l.created_at DESC LIMIT %s OFFSET %s"
         exec_params = params + [items_per_page, offset]
         cursor.execute(select_query, exec_params)
         products = cursor.fetchall()
