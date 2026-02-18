@@ -113,6 +113,7 @@
             min-height: 140px;
             font-size: 3.5rem;
             transition: all 0.3s;
+            line-height: 1;
         }
 
         .main-category-card:hover .category-icon-box {
@@ -252,7 +253,7 @@
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container-lg">
-            <a class="navbar-brand" href="homepg.html">
+            <a class="navbar-brand" href="/">
                 <i class="fas fa-recycle me-2"></i>ReGear
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -261,13 +262,13 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="homepg.html">Home</a>
+                        <a class="nav-link" href="/">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="categories.html">Sell</a>
+                        <a class="nav-link active" href="/sell">Sell</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="dashboard.html">Dashboard</a>
+                        <a class="nav-link" href="/dashboard">Dashboard</a>
                     </li>
                 </ul>
             </div>
@@ -279,8 +280,8 @@
         <div class="container-lg">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="homepg.html">Home</a></li>
-                    <li class="breadcrumb-item active">Sell</li>
+                    <li class="breadcrumb-item"><a href="/">Home</a></li>
+                    <li class="breadcrumb-item"><a href="/sell">Sell</a></li>
                     <li class="breadcrumb-item active">Categories</li>
                 </ol>
             </nav>
@@ -315,9 +316,9 @@
             <div class="footer-content">
                 <div>
                     <h6>ABOUT</h6>
-                    <a href="#">About ReGear</a>
-                    <a href="#">Blog</a>
-                    <a href="#">Careers</a>
+                    <a href="/">Home</a>
+                    <a href="/browse">Browse Listings</a>
+                    <a href="/dashboard">Dashboard</a>
                 </div>
                 <div>
                     <h6>HELP</h6>
@@ -326,10 +327,10 @@
                     <a href="#">FAQ</a>
                 </div>
                 <div>
-                    <h6>POLICIES</h6>
-                    <a href="#">Terms of Use</a>
-                    <a href="#">Privacy Policy</a>
-                    <a href="#">Cookie Policy</a>
+                    <h6>FEATURES</h6>
+                    <a href="/sell">Start Selling</a>
+                    <a href="/browse">Browse Items</a>
+                    <a href="#">Saved Items</a>
                 </div>
             </div>
             <div style="text-align: center; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px;">
@@ -341,36 +342,30 @@
     <!-- SCRIPTS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Category to Font Awesome icon mapping
-        const categoryIcons = {
-            'Mobile Phones': 'fas fa-mobile-alt',
-            'Laptops & Computers': 'fas fa-laptop',
-            'Computer Components': 'fas fa-microchip',
-            'Storage Devices': 'fas fa-hdd',
-            'Accessories': 'fas fa-plug',
-            'Gaming Equipment': 'fas fa-gamepad',
-            'Displays & Monitors': 'fas fa-desktop',
-            'Office Electronics': 'fas fa-print',
-            'Cameras & Photography': 'fas fa-camera',
-            'Networking Hardware': 'fas fa-network-wired'
-        };
-
         // Initialize the page
         function initializeCategories() {
             const categoriesGrid = document.getElementById('categoriesGrid');
 
-            // Fetch categories from backend API (supports both old and new response shapes)
+            // Fetch categories from backend API
             fetch('/api/categories')
                 .then(response => response.json())
-                .then(payload => {
-                    const data = payload.data || payload; // handle wrapper {success,data}
-                    const categoriesArray = Object.entries(data).map(([slug, details]) => ({
-                        name: details.name || details,
-                        icon: categoryIcons[details.name] || 'fas fa-tag',
-                        desc: (details.subcategories || []).slice(0, 3).map(s => s.name || s).join(', '),
-                        count: (details.subcategories || []).length,
-                        key: slug
-                    }));
+                .then(data => {
+                    // data is an object with category names as keys
+                    // Each value has icon and subcategories
+                    const categoriesArray = Object.entries(data).map(([categoryName, details]) => {
+                        const subcategoriesRaw = details.subcategories || [];
+                        const subcategories = subcategoriesRaw
+                            .map(s => (typeof s === 'string' ? s : (s && s.name) || ''))
+                            .filter(Boolean);
+                        const firstThree = subcategories.slice(0, 3).join(', ');
+                        return {
+                            name: categoryName,
+                            icon: details.icon || '📦',
+                            desc: firstThree,
+                            count: subcategories.length,
+                            key: categoryName
+                        };
+                    });
 
                     if (categoriesArray.length === 0) {
                         categoriesGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #999;">No categories available.</p>';
@@ -378,9 +373,9 @@
                     }
 
                     categoriesGrid.innerHTML = categoriesArray.map(cat => `
-                        <div class="main-category-card" onclick="goToSubcategories('${encodeURIComponent(cat.key)}')">
+                        <div class="main-category-card" data-category="${cat.name.replace(/"/g, '&quot;')}">
                             <div class="category-icon-box">
-                                <i class="${cat.icon}"></i>
+                                ${cat.icon}
                             </div>
                             <div class="category-content">
                                 <div class="category-name">${cat.name}</div>
@@ -390,6 +385,14 @@
                             </div>
                         </div>
                     `).join('');
+                    
+                    // Add click handlers to all category cards
+                    document.querySelectorAll('.main-category-card').forEach(card => {
+                        card.addEventListener('click', function() {
+                            const categoryName = this.getAttribute('data-category');
+                            goToSubcategories(categoryName);
+                        });
+                    });
                 })
                 .catch(error => {
                     console.error('Error loading categories:', error);
@@ -397,9 +400,9 @@
                 });
         }
 
-        function goToSubcategories(categorySlug) {
-            // Redirect to subcategories page with category parameter (slug)
-            window.location.href = `/subcategories?category=${encodeURIComponent(categorySlug)}`;
+        function goToSubcategories(categoryName) {
+            // Redirect to subcategories page with category parameter
+            window.location.href = `/subcategories?category=${encodeURIComponent(categoryName)}`;
         }
 
         function searchCategories() {

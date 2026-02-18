@@ -281,9 +281,9 @@
         <!-- SUBCATEGORIES GRID -->
         <div class="subcategories-container">
             {% for subcategory in subcategories %}
-            <div class="subcategory-card" onclick="selectSubcategory('{{ category }}', '{{ subcategory }}')">
+            <div class="subcategory-card" onclick="selectSubcategory('{{ category }}', '{{ subcategory.name }}', {{ subcategory.id }}, {{ category_id }})">
                 <i class="fas fa-tag subcat-icon"></i>
-                <div class="subcat-name">{{ subcategory }}</div>
+                <div class="subcat-name">{{ subcategory.name }}</div>
                 <p class="subcat-desc">Click to post</p>
             </div>
             {% endfor %}
@@ -322,7 +322,7 @@
     <!-- SCRIPTS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        function selectSubcategory(category, subcategory) {
+        function selectSubcategory(categoryName, subcategoryName, subcategoryId, categoryId) {
             // Save category and subcategory to session via API
             fetch('/save-category', {
                 method: 'POST',
@@ -330,23 +330,39 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    category: category,
-                    subcategory: subcategory
+                    category: categoryName,
+                    category_id: categoryId,
+                    subcategory: subcategoryName,
+                    subcategory_id: subcategoryId
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                // If backend redirected to login (HTML) or returned non-JSON, handle by redirecting to login
+                const contentType = response.headers.get('content-type') || '';
+                if (!response.ok) {
+                    // 4xx/5xx responses
+                    throw new Error('Server error');
+                }
+                if (!contentType.includes('application/json')) {
+                    // Likely a redirect to login page (HTML) — send user there
+                    window.location.href = '/login';
+                    return Promise.reject('Redirecting to login');
+                }
+                return response.json();
+            })
             .then(data => {
-                if (data.success) {
+                if (data && data.success) {
                     // Redirect to post ad form
-                    window.location.href = data.redirect;
+                    window.location.href = data.redirect_url;
                 } else {
-                    alert('Please login first');
+                    // If backend indicates failure (e.g., not authenticated), redirect to login
                     window.location.href = '/login';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred. Please try again.');
+                // Generic fallback - send user to login so they can authenticate
+                window.location.href = '/login';
             });
         }
     </script>

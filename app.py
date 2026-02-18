@@ -1,4 +1,3 @@
-from flask import Flask, render_template, request, redirect, session, flash, url_for
 from flask import Flask, render_template, request, redirect, session, flash, url_for, jsonify
 import mysql.connector
 from mysql.connector import Error as MySQLError
@@ -40,19 +39,24 @@ def verify_password(stored_hash, password):
 
 
 # Database connection
-try:
-  def get_db_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Shra@0303",
-        database="regear_db"
-    
-    )
-    print("✅ Database connected successfully!")
-except MySQLError as e:
-    print(f"❌ Database connection failed: {e}")
-    db = None
+def get_db_connection():
+    # Read DB credentials from environment with safe defaults for local dev
+    host = os.environ.get('REGEAR_DB_HOST', 'localhost')
+    user = os.environ.get('REGEAR_DB_USER', 'root')
+    password = os.environ.get('REGEAR_DB_PASSWORD', 'Shra@0303')
+    database = os.environ.get('REGEAR_DB_NAME', 'regear_db')
+
+    try:
+        return mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database
+        )
+    except MySQLError as e:
+        app.logger.error(f"DB connection failed (host={host} user={user} db={database}): {e}")
+        # Re-raise so callers can handle the exception and show user-friendly messages
+        raise
 
 # Login required decorator
 def login_required(f):
@@ -81,7 +85,29 @@ def admin_required(f):
 
 @app.route("/")
 def home():
-    return render_template("homepg.html")
+    """Home page with featured approved listings"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Fetch recent approved listings (latest 12)
+        cursor.execute("""
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
+            FROM listings l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.approval_status='approved' AND l.status='active'
+            ORDER BY l.created_at DESC
+            LIMIT 12
+        """)
+        
+        featured_listings = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return render_template("homepg.html", featured_listings=featured_listings)
+    except Exception as e:
+        print(f"Error loading featured listings: {e}")
+        return render_template("homepg.html", featured_listings=[])
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -139,13 +165,7 @@ def login():
         password = request.form.get("password")
 
         try:
-            conn = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="Shra@0303",
-                database="regear_db"
-            )
-
+            conn = get_db_connection()
             cursor = conn.cursor()
 
             cursor.execute(
@@ -229,17 +249,14 @@ def reset_password():
     if request.method == "POST":
         new_password = request.form.get("password")
 
-        conn = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="Shra@0303",
-            database="regear_db"
-        )
+        conn = get_db_connection()
         cursor = conn.cursor()
 
+        # Hash and store the new password
+        hashed_password = hash_password(new_password)
         cursor.execute(
             "UPDATE users SET password=%s WHERE email=%s",
-            (new_password, session["reset_email"])
+            (hashed_password, session["reset_email"])
         )
 
         conn.commit()
@@ -274,10 +291,17 @@ def logout():
 @app.route("/health")
 def health():
     """Health check endpoint"""
+    try:
+        conn = get_db_connection()
+        conn.close()
+        db_status = "connected"
+    except:
+        db_status = "disconnected"
+    
     return jsonify({
         "status": "ok",
         "message": "ReGear server is running",
-        "database": "connected" if db else "disconnected"
+        "database": db_status
     })
 
 @app.route("/api/reverse-geocode")
@@ -327,93 +351,34 @@ def reverse_geocode():
 
 @app.route("/api/categories", methods=["GET"])
 def get_categories():
-    """API endpoint to get categories (for frontend) - Electronics & Hardware Only"""
-    categories = {
-        'Mobiles': {
-            'icon': '📱',
-            'subcategories': ['iPhone 6', 'iPhone 7', 'iPhone 8', 'iPhone X', 'iPhone 11', 'iPhone 12', 'iPhone 13', 'iPhone 14', 'iPhone 15',
-                            'Samsung Galaxy S6', 'Samsung Galaxy S7', 'Samsung Galaxy S8', 'Samsung Galaxy S9', 'Samsung Galaxy S10', 'Samsung Galaxy S20', 'Samsung Galaxy S21', 'Samsung Galaxy S22', 'Samsung Galaxy S23',
-                            'OnePlus 5', 'OnePlus 6', 'OnePlus 7', 'OnePlus 8', 'OnePlus 9', 'OnePlus 10',
-                            'Xiaomi Redmi', 'Xiaomi Poco', 'Xiaomi Mi',
-                            'Realme 3', 'Realme 5', 'Realme 6', 'Realme 7', 'Realme 8', 'Realme 9',
-                            'Oppo A Series', 'Oppo F Series', 'Oppo Reno',
-                            'Vivo Y Series', 'Vivo V Series', 'Vivo X Series',
-                            'Motorola G Series', 'Motorola E Series',
-                            'Nokia Lumia', 'Nokia Android',
-                            'Google Pixel', 'Google Nexus',
-                            'Sony Xperia', 'HTC', 'LG G Series',
-                            'Mobile Accessories', 'Phone Chargers', 'Screen Protectors', 'Phone Cases', 'Power Banks', 'Phone Stands', 'Tempered Glass']
-        },
-        'Laptops & Computers': {
-            'icon': '💻',
-            'subcategories': ['Gaming Laptops', 'Business Laptops', 'MacBooks', 'Ultrabooks', 'Budget Laptops', 'Desktop Computers', 'Gaming PCs', 'All-in-One PCs', 'Mini PCs', 'Workstations', 'Tablets', 'iPads', 'Android Tablets']
-        },
-        'Computer Hardware': {
-            'icon': '⚙️',
-            'subcategories': ['Graphics Cards (GPU)', 'Processors (CPU)', 'Motherboards', 'RAM Memory', 'Solid State Drives (SSD)', 'Hard Disk Drives (HDD)', 'Power Supply Units', 'CPU Coolers', 'Computer Cases', 'Fans & Cooling', 'BIOS Chips', 'Server Hardware', 'Networking Cards']
-        },
-        'Peripherals & Accessories': {
-            'icon': '⌨️',
-            'subcategories': ['Mechanical Keyboards', 'Gaming Keyboards', 'Wireless Keyboards', 'Computer Mouse', 'Gaming Mouse', 'Trackpads', 'Monitor Stands', 'Cable Organizers', 'USB Hubs', 'Cables & Adapters', 'HDMI Cables', 'USB Cables', 'Ethernet Cables', 'Docking Stations']
-        },
-        'Monitors & Displays': {
-            'icon': '🖥️',
-            'subcategories': ['Gaming Monitors', '4K Monitors', 'IPS Monitors', 'TN Monitors', 'VA Monitors', 'Curved Monitors', 'Portable Monitors', 'LED Displays', 'Professional Monitors', 'Monitor Arms', 'Monitor Stands']
-        },
-        'Audio & Sound': {
-            'icon': '🎧',
-            'subcategories': ['Headphones', 'Earbuds', 'Wireless Earbuds', 'Gaming Headsets', 'Studio Headphones', 'Noise Cancelling Headphones', 'Speakers', 'Bluetooth Speakers', 'Studio Monitors', 'Subwoofers', 'Microphones', 'Audio Interfaces', 'Amplifiers']
-        },
-        'Cameras & Optics': {
-            'icon': '📷',
-            'subcategories': ['DSLR Cameras', 'Mirrorless Cameras', 'Digital Cameras', 'Action Cameras', 'Instant Cameras', 'Film Cameras', 'Camera Lenses', 'Camera Tripods', 'Camera Stands', 'Camera Bags', 'Lighting Equipment', 'Ring Lights', 'Studio Lights', 'Reflectors']
-        },
-        'Printers & Scanners': {
-            'icon': '🖨️',
-            'subcategories': ['Inkjet Printers', 'Laser Printers', 'All-in-One Printers', 'Photo Printers', '3D Printers', 'Document Scanners', 'Flatbed Scanners', 'Printer Cartridges', 'Toner Cartridges', 'Printer Paper', 'Ink Supplies']
-        },
-        'Gaming Hardware': {
-            'icon': '🎮',
-            'subcategories': ['Gaming Consoles', 'PlayStation', 'Xbox', 'Nintendo Switch', 'Gaming Controllers', 'VR Headsets', 'Gaming Chairs', 'Racing Wheels', 'Arcade Sticks', 'Gaming Desks', 'Gaming Lamps']
-        },
-        'Networking Equipment': {
-            'icon': '🌐',
-            'subcategories': ['WiFi Routers', 'WiFi 6 Routers', 'Mesh WiFi Systems', 'Modems', 'Network Switches', 'Network Cables', 'WiFi Extenders', 'Wireless Access Points', 'Network Adapters', 'Ethernet Hubs']
-        },
-        'Smart Devices & IoT': {
-            'icon': '🔌',
-            'subcategories': ['Smart Watches', 'Fitness Trackers', 'Smart Home Hubs', 'Smart Speakers', 'Smart Thermostats', 'Smart Lights', 'Smart Plugs', 'Smart Locks', 'Smart Door Bells', 'Security Cameras', 'Smart Displays']
-        },
-        'TVs & Displays': {
-            'icon': '📺',
-            'subcategories': ['LED TVs', 'QLED TVs', 'Smart TVs', 'OLED TVs', 'Mini LED TVs', '4K TVs', '8K TVs', 'Curved TVs', 'Portable Projectors', 'Home Projectors', 'TV Stands', 'TV Wall Mounts']
-        },
-        'Kitchen Appliances': {
-            'icon': '🍳',
-            'subcategories': ['Refrigerators', 'Microwave Ovens', 'Electric Ovens', 'Dishwashers', 'Washing Machines', 'Washing Machine Drums', 'Dryers', 'Air Fryers', 'Electric Cookers', 'Blenders', 'Mixer Grinders', 'Juicers', 'Coffee Makers', 'Toasters', 'Water Purifiers', 'Electric Kettles', 'Rice Cookers']
-        },
-        'Home Appliances': {
-            'icon': '❄️',
-            'subcategories': ['Air Conditioners', 'Air Coolers', 'Fans', 'Heaters', 'Humidifiers', 'Dehumidifiers', 'Vacuum Cleaners', 'Air Purifiers', 'Water Heaters', 'Geysers', 'Inverters', 'Solar Panels', 'Solar Batteries']
-        },
-        'Electronic Components': {
-            'icon': '🔧',
-            'subcategories': ['Semiconductors', 'Integrated Circuits', 'Transistors', 'Capacitors', 'Resistors', 'Diodes', 'LED Components', 'Connectors', 'Switches', 'Relays', 'Transformers', 'Circuit Boards (PCB)', 'Cooling Compounds', 'Thermal Paste', 'Solder & Flux']
-        },
-        'Testing & Tools': {
-            'icon': '🔍',
-            'subcategories': ['Digital Multimeters', 'Oscilloscopes', 'Power Supplies (Lab)', 'Soldering Irons', 'Heat Guns', 'Logic Analyzers', 'Network Testers', 'Thermal Cameras', 'Clamp Meters', 'Tool Kits', 'Cable Testers', 'RF Meters']
-        },
-        'Batteries & Power': {
-            'icon': '🔋',
-            'subcategories': ['Lithium Ion Batteries', 'Lithium Polymer Batteries', 'Lead Acid Batteries', 'Ni-MH Batteries', 'Battery Packs', 'UPS Units', 'Power Banks', 'Charging Cables', 'Battery Chargers', 'Solar Chargers', 'Car Chargers', 'Fast Chargers']
-        },
-        'Networking Cables': {
-            'icon': '🧵',
-            'subcategories': ['Ethernet Cables (Cat5e)', 'Ethernet Cables (Cat6)', 'Ethernet Cables (Cat7)', 'Fiber Optic Cables', 'HDMI Cables', 'USB Cables (Type A)', 'USB Cables (Type C)', 'USB Cables (Lightning)', 'Audio Cables', 'Video Cables', 'Power Cables', 'Coaxial Cables']
-        }
-    }
-    return jsonify(categories)
+    """API endpoint to get categories from database"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, name, icon FROM categories ORDER BY name")
+        categories = cursor.fetchall()
+        
+        result = {}
+        for cat in categories:
+            cat_id = cat['id']
+            # Fetch subcategories for this category
+            cursor.execute(
+                "SELECT id, name FROM subcategories WHERE category_id = %s ORDER BY name",
+                (cat_id,)
+            )
+            subcats = cursor.fetchall()
+            
+            result[cat['name']] = {
+                'icon': cat['icon'],
+                'id': cat_id,
+                'subcategories': [{'id': s['id'], 'name': s['name']} for s in subcats]
+            }
+        
+        cursor.close()
+        conn.close()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/sell")
 def sell():
@@ -423,99 +388,44 @@ def sell():
 @app.route("/subcategories")
 def subcategories():
     """Show subcategories for selected category"""
-    category = request.args.get('category')
+    category_name = request.args.get('category')
     
-    categories = {
-        'Mobiles': {
-            'icon': '📱',
-            'subcategories': ['iPhone 6', 'iPhone 7', 'iPhone 8', 'iPhone X', 'iPhone 11', 'iPhone 12', 'iPhone 13', 'iPhone 14', 'iPhone 15',
-                            'Samsung Galaxy S6', 'Samsung Galaxy S7', 'Samsung Galaxy S8', 'Samsung Galaxy S9', 'Samsung Galaxy S10', 'Samsung Galaxy S20', 'Samsung Galaxy S21', 'Samsung Galaxy S22', 'Samsung Galaxy S23',
-                            'OnePlus 5', 'OnePlus 6', 'OnePlus 7', 'OnePlus 8', 'OnePlus 9', 'OnePlus 10',
-                            'Xiaomi Redmi', 'Xiaomi Poco', 'Xiaomi Mi',
-                            'Realme 3', 'Realme 5', 'Realme 6', 'Realme 7', 'Realme 8', 'Realme 9',
-                            'Oppo A Series', 'Oppo F Series', 'Oppo Reno',
-                            'Vivo Y Series', 'Vivo V Series', 'Vivo X Series',
-                            'Motorola G Series', 'Motorola E Series',
-                            'Nokia Lumia', 'Nokia Android',
-                            'Google Pixel', 'Google Nexus',
-                            'Sony Xperia', 'HTC', 'LG G Series',
-                            'Mobile Accessories', 'Phone Chargers', 'Screen Protectors', 'Phone Cases', 'Power Banks', 'Phone Stands', 'Tempered Glass']
-        },
-        'Laptops & Computers': {
-            'icon': '💻',
-            'subcategories': ['Gaming Laptops', 'Business Laptops', 'MacBooks', 'Ultrabooks', 'Budget Laptops', 'Desktop Computers', 'Gaming PCs', 'All-in-One PCs', 'Mini PCs', 'Workstations', 'Tablets', 'iPads', 'Android Tablets']
-        },
-        'Computer Hardware': {
-            'icon': '⚙️',
-            'subcategories': ['Graphics Cards (GPU)', 'Processors (CPU)', 'Motherboards', 'RAM Memory', 'Solid State Drives (SSD)', 'Hard Disk Drives (HDD)', 'Power Supply Units', 'CPU Coolers', 'Computer Cases', 'Fans & Cooling', 'BIOS Chips', 'Server Hardware', 'Networking Cards']
-        },
-        'Peripherals & Accessories': {
-            'icon': '⌨️',
-            'subcategories': ['Mechanical Keyboards', 'Gaming Keyboards', 'Wireless Keyboards', 'Computer Mouse', 'Gaming Mouse', 'Trackpads', 'Monitor Stands', 'Cable Organizers', 'USB Hubs', 'Cables & Adapters', 'HDMI Cables', 'USB Cables', 'Ethernet Cables', 'Docking Stations']
-        },
-        'Monitors & Displays': {
-            'icon': '🖥️',
-            'subcategories': ['Gaming Monitors', '4K Monitors', 'IPS Monitors', 'TN Monitors', 'VA Monitors', 'Curved Monitors', 'Portable Monitors', 'LED Displays', 'Professional Monitors', 'Monitor Arms', 'Monitor Stands']
-        },
-        'Audio & Sound': {
-            'icon': '🎧',
-            'subcategories': ['Headphones', 'Earbuds', 'Wireless Earbuds', 'Gaming Headsets', 'Studio Headphones', 'Noise Cancelling Headphones', 'Speakers', 'Bluetooth Speakers', 'Studio Monitors', 'Subwoofers', 'Microphones', 'Audio Interfaces', 'Amplifiers']
-        },
-        'Cameras & Optics': {
-            'icon': '📷',
-            'subcategories': ['DSLR Cameras', 'Mirrorless Cameras', 'Digital Cameras', 'Action Cameras', 'Instant Cameras', 'Film Cameras', 'Camera Lenses', 'Camera Tripods', 'Camera Stands', 'Camera Bags', 'Lighting Equipment', 'Ring Lights', 'Studio Lights', 'Reflectors']
-        },
-        'Printers & Scanners': {
-            'icon': '🖨️',
-            'subcategories': ['Inkjet Printers', 'Laser Printers', 'All-in-One Printers', 'Photo Printers', '3D Printers', 'Document Scanners', 'Flatbed Scanners', 'Printer Cartridges', 'Toner Cartridges', 'Printer Paper', 'Ink Supplies']
-        },
-        'Gaming Hardware': {
-            'icon': '🎮',
-            'subcategories': ['Gaming Consoles', 'PlayStation', 'Xbox', 'Nintendo Switch', 'Gaming Controllers', 'VR Headsets', 'Gaming Chairs', 'Racing Wheels', 'Arcade Sticks', 'Gaming Desks', 'Gaming Lamps']
-        },
-        'Networking Equipment': {
-            'icon': '🌐',
-            'subcategories': ['WiFi Routers', 'WiFi 6 Routers', 'Mesh WiFi Systems', 'Modems', 'Network Switches', 'Network Cables', 'WiFi Extenders', 'Wireless Access Points', 'Network Adapters', 'Ethernet Hubs']
-        },
-        'Smart Devices & IoT': {
-            'icon': '🔌',
-            'subcategories': ['Smart Watches', 'Fitness Trackers', 'Smart Home Hubs', 'Smart Speakers', 'Smart Thermostats', 'Smart Lights', 'Smart Plugs', 'Smart Locks', 'Smart Door Bells', 'Security Cameras', 'Smart Displays']
-        },
-        'TVs & Displays': {
-            'icon': '📺',
-            'subcategories': ['LED TVs', 'QLED TVs', 'Smart TVs', 'OLED TVs', 'Mini LED TVs', '4K TVs', '8K TVs', 'Curved TVs', 'Portable Projectors', 'Home Projectors', 'TV Stands', 'TV Wall Mounts']
-        },
-        'Kitchen Appliances': {
-            'icon': '🍳',
-            'subcategories': ['Refrigerators', 'Microwave Ovens', 'Electric Ovens', 'Dishwashers', 'Washing Machines', 'Washing Machine Drums', 'Dryers', 'Air Fryers', 'Electric Cookers', 'Blenders', 'Mixer Grinders', 'Juicers', 'Coffee Makers', 'Toasters', 'Water Purifiers', 'Electric Kettles', 'Rice Cookers']
-        },
-        'Home Appliances': {
-            'icon': '❄️',
-            'subcategories': ['Air Conditioners', 'Air Coolers', 'Fans', 'Heaters', 'Humidifiers', 'Dehumidifiers', 'Vacuum Cleaners', 'Air Purifiers', 'Water Heaters', 'Geysers', 'Inverters', 'Solar Panels', 'Solar Batteries']
-        },
-        'Electronic Components': {
-            'icon': '🔧',
-            'subcategories': ['Semiconductors', 'Integrated Circuits', 'Transistors', 'Capacitors', 'Resistors', 'Diodes', 'LED Components', 'Connectors', 'Switches', 'Relays', 'Transformers', 'Circuit Boards (PCB)', 'Cooling Compounds', 'Thermal Paste', 'Solder & Flux']
-        },
-        'Testing & Tools': {
-            'icon': '🔍',
-            'subcategories': ['Digital Multimeters', 'Oscilloscopes', 'Power Supplies (Lab)', 'Soldering Irons', 'Heat Guns', 'Logic Analyzers', 'Network Testers', 'Thermal Cameras', 'Clamp Meters', 'Tool Kits', 'Cable Testers', 'RF Meters']
-        },
-        'Batteries & Power': {
-            'icon': '🔋',
-            'subcategories': ['Lithium Ion Batteries', 'Lithium Polymer Batteries', 'Lead Acid Batteries', 'Ni-MH Batteries', 'Battery Packs', 'UPS Units', 'Power Banks', 'Charging Cables', 'Battery Chargers', 'Solar Chargers', 'Car Chargers', 'Fast Chargers']
-        },
-        'Networking Cables': {
-            'icon': '🧵',
-            'subcategories': ['Ethernet Cables (Cat5e)', 'Ethernet Cables (Cat6)', 'Ethernet Cables (Cat7)', 'Fiber Optic Cables', 'HDMI Cables', 'USB Cables (Type A)', 'USB Cables (Type C)', 'USB Cables (Lightning)', 'Audio Cables', 'Video Cables', 'Power Cables', 'Coaxial Cables']
-        }
-    }
-    
-    if category not in categories:
-        flash("❌ Invalid category", "error")
+    if not category_name:
+        flash("❌ No category selected", "error")
         return redirect(url_for("sell"))
     
-    return render_template("subcategories.html", category=category, subcategories=categories[category]['subcategories'])
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get category ID
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (category_name,))
+        result = cursor.fetchone()
+        
+        if not result:
+            flash("❌ Invalid category", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("sell"))
+        
+        category_id = result['id']
+        
+        # Get subcategories for this category
+        cursor.execute(
+            "SELECT id, name FROM subcategories WHERE category_id = %s ORDER BY name",
+            (category_id,)
+        )
+        subcategories_list = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return render_template("subcategories.html", 
+                             category=category_name, 
+                             category_id=category_id,
+                             subcategories=subcategories_list)
+    except Exception as e:
+        flash(f"❌ Error loading subcategories: {str(e)}", "error")
+        return redirect(url_for("sell"))
 
 @app.route("/save-category", methods=["POST"])
 @login_required
@@ -524,13 +434,17 @@ def save_category():
     try:
         data = request.get_json()
         category = data.get('category')
+        category_id = data.get('category_id')
         subcategory = data.get('subcategory')
+        subcategory_id = data.get('subcategory_id')
         
-        if not category or not subcategory:
+        if not all([category, subcategory, category_id, subcategory_id]):
             return jsonify({"success": False, "message": "Invalid selection"}), 400
         
         session['selected_category'] = category
+        session['selected_category_id'] = category_id
         session['selected_subcategory'] = subcategory
+        session['selected_subcategory_id'] = subcategory_id
         
         return jsonify({"success": True, "message": "Category saved", "redirect_url": url_for("post_ad_form")})
         
@@ -612,7 +526,7 @@ def post_ad_form():
             cursor.execute("""
                 INSERT INTO listings (user_id, category, subcategory, title, description, price, location, phone, email, item_condition, photos, created_at, status, approval_status)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (user_id, category, subcategory, title, description, price, location, phone, email, condition, photos_str, datetime.now(), 'pending', 'pending'))
+            """, (user_id, category, subcategory, title, description, price, location, phone, email, condition, photos_str, datetime.now(), 'active', 'pending'))
 
             conn.commit()
             listing_id = cursor.lastrowid
@@ -630,7 +544,7 @@ def post_ad_form():
             conn.close()
 
             flash("✅ Your ad has been submitted successfully! It's now pending admin review. Once approved, it will be published on the website.", "success")
-            return redirect(url_for("my_listings"))
+            return redirect(url_for("dashboard"))
             
         except Exception as e:
             flash(f"❌ Error posting ad: {str(e)}", "error")
@@ -670,24 +584,52 @@ def my_listings():
 
 @app.route("/browse")
 def browse():
-    """Browse all listings"""
+    """Browse all listings with optional category filter"""
     try:
+        # Get filter parameters
+        category_filter = request.args.get('category', '')
+        search_query = request.args.get('search', '')
+        
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        cursor.execute("""
+        # Build dynamic query based on filters
+        query = """
             SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
             FROM listings l
             JOIN users u ON l.user_id = u.id
-            WHERE l.approval_status='approved'
-            ORDER BY l.created_at DESC
-        """)
+            WHERE l.approval_status='approved' AND l.status='active'
+        """
+        params = []
         
+        # Apply category filter if provided
+        if category_filter:
+            query += " AND l.category = %s"
+            params.append(category_filter)
+        
+        # Apply search filter if provided
+        if search_query:
+            query += " AND (l.title LIKE %s OR l.description LIKE %s OR l.category LIKE %s)"
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param])
+        
+        query += " ORDER BY l.created_at DESC"
+        
+        cursor.execute(query, params)
         listings = cursor.fetchall()
+        
+        # Get all categories for the filter dropdown
+        cursor.execute("SELECT DISTINCT category FROM listings WHERE approval_status='approved' ORDER BY category")
+        categories = [row['category'] for row in cursor.fetchall()]
+        
         cursor.close()
         conn.close()
         
-        return render_template("browse_listings.html", listings=listings)
+        return render_template("browse_listings.html", 
+                             listings=listings, 
+                             categories=categories,
+                             selected_category=category_filter,
+                             search_query=search_query)
         
     except Exception as e:
         flash(f"❌ Error loading listings: {str(e)}", "error")
@@ -860,10 +802,13 @@ if __name__ == "__main__":
     # Fix Unicode encoding for Windows
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+    # Run the Flask development server
+    app.run(host='0.0.0.0', port=5000, debug=True)
     
     print("🚀 Starting ReGear Server...")
     print("📍 Server running at: http://localhost:5000")
     print("📝 Register: http://localhost:5000/register")
     print("🔐 Login: http://localhost:5000/login")
     print("🛍️ Sell: http://localhost:5000/sell")
-    app.run(debug=False, host='localhost', port=5000, use_reloader=False)
+    app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)

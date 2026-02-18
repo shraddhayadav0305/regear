@@ -360,16 +360,9 @@
                         </div>
                         <select id="categoryFilter" class="form-select form-select-sm" onchange="updateFilters()">
                             <option value="">All Categories</option>
-                            <option value="mobile-phones">Mobile Phones</option>
-                            <option value="laptops-computers">Laptops & Computers</option>
-                            <option value="computer-components">Computer Components</option>
-                            <option value="storage-devices">Storage Devices</option>
-                            <option value="accessories">Accessories</option>
-                            <option value="gaming-equipment">Gaming Equipment</option>
-                            <option value="displays-monitors">Displays & Monitors</option>
-                            <option value="office-electronics">Office Electronics</option>
-                            <option value="cameras-photography">Cameras & Photography</option>
-                            <option value="networking-hardware">Networking Hardware</option>
+                            {% for category in categories %}
+                                <option value="{{ category }}" {% if selected_category == category %}selected{% endif %}>{{ category }}</option>
+                            {% endfor %}
                         </select>
                     </div>
 
@@ -518,6 +511,12 @@
             const location = document.getElementById('locationFilter').value.toLowerCase();
             const sort = document.getElementById('sortSelect').value;
             
+            // If category filter changed, update URL to reload from server
+            if (category) {
+                window.location.href = '/browse?category=' + encodeURIComponent(category);
+                return;
+            }
+            
             const conditions = [];
             document.querySelectorAll('[id^="cond-"]').forEach(cb => {
                 if (cb.checked) conditions.push(cb.value);
@@ -528,11 +527,6 @@
 
             cards.forEach(card => {
                 let show = true;
-
-                // Category filter
-                if (category && card.dataset.category !== category) {
-                    show = false;
-                }
 
                 // Price filter
                 const price = parseInt(card.dataset.price);
@@ -578,6 +572,12 @@
         }
 
         function resetFilters() {
+            // If category was filtered, go back to browse
+            if (document.getElementById('categoryFilter').value) {
+                window.location.href = '/browse';
+                return;
+            }
+            
             document.getElementById('categoryFilter').value = '';
             document.getElementById('priceMin').value = '';
             document.getElementById('priceMax').value = '';
