@@ -32,6 +32,10 @@
                                 <span class="badge bg-danger">Blocked</span>
                             {% endif %}
                         </p>
+                        {% if user.role == 'seller' %}
+                            <p><strong>Package:</strong> {{ user.seller_package or 'N/A' }}</p>
+                            <p><strong>Registration Fee:</strong> ₹{{ user.registration_fee or '0.00' }}</p>
+                        {% endif %}
                         <p><strong>Member Since:</strong> {{ user.created_at.strftime('%B %d, %Y') }}</p>
                         {% if user.warning_count > 0 %}
                             <p><strong>Warnings:</strong> 

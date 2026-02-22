@@ -493,6 +493,18 @@
                 </div>
             </div>
 
+            <!-- SELLER PACKAGE (hidden until "seller" selected) -->
+            <div class="form-group" id="sellerPackageSection" style="display:none;">
+                <label class="form-label" for="package">Seller Package</label>
+                <select id="package" name="package" class="form-control">
+                    <option value="">-- Select package --</option>
+                    {% for pack, fee in package_fees.items() %}
+                        <option value="{{ pack }}">{{ pack }}+ items &ndash; ₹{{ fee }}</option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted" id="packageFeeDisplay"></small>
+            </div>
+
             <form id="registerForm" method="POST" action="/register">
                 <!-- HIDDEN ROLE FIELD -->
                 <input type="hidden" id="selectedRole" name="role" value="buyer">
@@ -579,22 +591,68 @@
 <script>
     // Role Selection
     function selectRole(role, element) {
-        document.querySelectorAll('.role-option').forEach(card => card.classList.remove('selected'));
+        // common behaviour
+        document.querySelectorAll('.role-option').forEach(el => el.classList.remove('selected'));
         element.classList.add('selected');
         document.getElementById('selectedRole').value = role;
+
+        // show/hide package options for sellers and toggle required attribute
+        const pkgSection = document.getElementById('sellerPackageSection');
+        const pkgSelect = document.getElementById('package');
+        if (role === 'seller') {
+            pkgSection.style.display = 'block';
+            if (pkgSelect) pkgSelect.required = true;
+        } else {
+            pkgSection.style.display = 'none';
+            if (pkgSelect) {
+                pkgSelect.value = '';
+                pkgSelect.required = false;
+                document.getElementById('packageFeeDisplay').textContent = '';
+            }
+        }
     }
 
-    // Select Role
-    function selectRole(role, element) {
-        // Update hidden input value
-        document.getElementById('selectedRole').value = role;
-        
-        // Update UI - remove selected from all, add to clicked
-        document.querySelectorAll('.role-option').forEach(el => {
-            el.classList.remove('selected');
-        });
-        element.classList.add('selected');
-    }
+    // update fee display when package changes and client-side submit validation
+    document.addEventListener('DOMContentLoaded', function() {
+        const pkgSelect = document.getElementById('package');
+        const registerForm = document.getElementById('registerForm');
+        const alertBox = document.getElementById('alertMessage');
+
+        // build fee map from server-provided data
+        const feeMap = {
+            {% for pack, fee in package_fees.items() %}
+                "{{ pack }}": {{ fee }},{% endfor %}
+        };
+
+        if (pkgSelect) {
+            pkgSelect.addEventListener('change', function() {
+                const display = document.getElementById('packageFeeDisplay');
+                const val = this.value && this.value.trim();
+                if (val && feeMap[val] !== undefined) {
+                    display.textContent = "Registration fee: ₹" + feeMap[val];
+                } else {
+                    display.textContent = "";
+                }
+            });
+        }
+
+        // client-side validation to prevent server flash when seller hasn't selected a package
+        if (registerForm) {
+            registerForm.addEventListener('submit', function(e) {
+                const role = document.getElementById('selectedRole').value;
+                if (role === 'seller') {
+                    const pkg = pkgSelect ? pkgSelect.value && pkgSelect.value.trim() : '';
+                    if (!pkg || !(pkg in feeMap)) {
+                        e.preventDefault();
+                        alertBox.innerHTML = '<div class="alert-message error" style="display:block;">❌ Please select a valid seller package before continuing.</div>';
+                        alertBox.scrollIntoView({ behavior: 'smooth' });
+                        return false;
+                    }
+                }
+                return true;
+            });
+        }
+    });
 
     // Toggle Password Visibility
     function togglePassword(fieldId, iconId) {

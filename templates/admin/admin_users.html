@@ -45,6 +45,8 @@
                             <th>Email</th>
                             <th>Phone</th>
                             <th>Role</th>
+                        <th>Package</th>
+                        <th>Fee</th>
                             <th>Joined</th>
                             <th class="text-center">Actions</th>
                         </tr>
@@ -67,6 +69,8 @@
                                         <span class="badge bg-secondary">{{ user.role }}</span>
                                     {% endif %}
                                 </td>
+                                <td>{{ user.seller_package or '-' }}</td>
+                                <td>{% if user.registration_fee %}₹{{ user.registration_fee }}{% else %}-{% endif %}</td>
                                 <td><small>{{ user.created_at.strftime('%Y-%m-%d') }}</small></td>
                                 <td class="text-center">
                                     <a href="{{ url_for('admin.view_user', user_id=user.id) }}" 

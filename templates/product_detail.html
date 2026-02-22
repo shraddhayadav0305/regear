@@ -389,6 +389,12 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/browse">Browse</a>
                     </li>
+                    <li class="nav-item wishlist-nav">
+                        <button class="navbar-icon-btn wishlist-btn" onclick="toggleWishlist()" title="Wishlist">
+                            <i class="fas fa-heart"></i>
+                            <span class="navbar-icon-badge" id="wishlistBadge">{{ wishlist_count }}</span>
+                        </button>
+                    </li>
                     <li class="nav-item">
                         <a href="/sell" class="sell-btn ms-3">
                             <i class="fas fa-plus"></i> Sell
@@ -486,8 +492,18 @@
             <div class="col-lg-4">
                 <!-- Price Section -->
                 <div class="price-section">
+                    <div class="d-flex justify-content-between align-items-center">
                     <div class="product-price">₹{{ listing.price }}</div>
-                    <div class="price-note">Fixed Price</div>
+                    <div class="icons">
+                        <a href="/wishlist/toggle/{{ listing.id }}" title="Wishlist" class="me-3">
+                            <i id="wishlistIcon" class="{% if listing.in_wishlist %}fas{% else %}far{% endif %} fa-heart" style="color:#e63946;"></i>
+                        </a>
+                        <a href="#" onclick="shareListing()" title="Share">
+                            <i class="fas fa-share-alt" style="color:#333;"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="price-note">Fixed Price</div>
                     
                     <div class="detail-row">
                         <span class="detail-label"><i class="fas fa-map-marker-alt"></i> Location:</span>
@@ -501,42 +517,75 @@
                         <span class="detail-label"><i class="fas fa-cubes"></i> Condition:</span>
                         <span class="detail-value">{{ listing.item_condition or 'Used' }}</span>
                     </div>
-
-                    <div class="action-buttons mt-4">
-                        <a href="javascript:void(0)" class="btn-primary-custom">
-                            <i class="fas fa-comment-alt"></i> Chat with Seller
-                        </a>
-                        <a href="tel:{{ listing.seller_phone or '' }}" class="btn-outline-primary-custom">
-                            <i class="fas fa-phone-alt"></i> Call Seller
-                        </a>
-                    </div>
                 </div>
 
                 <!-- Seller Card -->
                 <div class="seller-card">
-                    <div class="seller-header">
-                        <div class="seller-avatar">{{ listing.username[0].upper() }}</div>
-                        <div class="seller-info">
-                            <h5>{{ listing.username }}</h5>
-                            <p>Verified Seller</p>
+                    <a href="/seller/{{ listing.user_id }}" class="text-decoration-none text-dark">
+                        <div class="seller-header">
+                            <div class="seller-avatar">{{ listing.username[0].upper() }}</div>
+                            <div class="seller-info">
+                                <p class="small text-muted mb-1">Posted by</p>
+                                <h5 class="d-inline">{{ listing.username }}</h5>
+                                <i class="fas fa-chevron-right ms-2" style="font-size:0.9rem;
+                                   vertical-align:middle;color:#666"></i>
+                                <p class="mt-1">Verified Seller</p>
+                            </div>
                         </div>
+                    </a>
+                    <!-- membership/date and badge -->
+                    <div class="detail-row" style="border: none; padding: 0; margin-bottom: 8px;">
+                        <span class="detail-value" style="font-size:0.9rem; color:#666;">
+                            Member since {{ listing.seller_joined.strftime('%b %Y') if listing.seller_joined else 'Unknown' }}
+                        </span>
                     </div>
-                    
+                    {% if listing.seller_listings_count is not none %}
+                        <div class="detail-row" style="border: none; padding: 0; margin-bottom: 8px;">
+                            <span class="detail-value" style="font-size:0.9rem; color:#666;">
+                                {{ listing.seller_listings_count }} items listed
+                            </span>
+                        </div>
+                    {% endif %}
+                    {% if listing.seller_listings_count and listing.seller_listings_count >= 10 %}
+                        <div class="detail-row" style="border: none; padding: 0; margin-bottom: 8px;">
+                            <span class="badge bg-primary">ELITE SELLER</span>
+                        </div>
+                    {% endif %}
                     {% if listing.seller_phone %}
                         <div class="detail-row" style="border: none; padding: 0;">
                             <span class="detail-label"><i class="fas fa-phone"></i></span>
-                            <span class="detail-value"><a href="tel:{{ listing.seller_phone }}" style="color: #0066cc; text-decoration: none;">{{ listing.seller_phone }}</a></span>
+                            <span class="detail-value" id="phoneValue">
+                                <a href="#" id="showNumberBtn" data-phone="{{ listing.seller_phone }}" style="color:#0066cc;text-decoration:none;">Show number</a>
+                            </span>
                         </div>
                     {% endif %}
-                    
                     {% if listing.seller_email %}
                         <div class="detail-row" style="border: none; padding: 0;">
                             <span class="detail-label"><i class="fas fa-envelope"></i></span>
                             <span class="detail-value"><a href="mailto:{{ listing.seller_email }}" style="color: #0066cc; text-decoration: none;">{{ listing.seller_email }}</a></span>
                         </div>
                     {% endif %}
+                    <!-- chat button -->
+                    {% if listing.status != 'sold' %}
+                        <div class="detail-row" style="border: none; padding: 0; margin-top:15px;">
+                            <a href="/buy/{{ listing.id }}" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-comments"></i> Chat with seller
+                            </a>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- WISHLIST PANEL -->
+    <div id="wishlistPanel" class="navbar-panel hidden" style="position:absolute;top:56px;right:0;z-index:1001;">
+        <div class="panel-header">
+            <h5>Wishlist</h5>
+            <button class="close-btn" onclick="toggleWishlist()">&times;</button>
+        </div>
+        <div class="panel-content" id="wishlistContent">
+            <p class="empty-message">No items in your wishlist yet</p>
         </div>
     </div>
 
@@ -586,6 +635,52 @@
             document.getElementById('mainImage').src = img.src;
             document.querySelectorAll('.thumbnail').forEach(t => t.classList.remove('active'));
             img.classList.add('active');
+        }
+        document.addEventListener('DOMContentLoaded', function(){
+            var btn = document.getElementById('showNumberBtn');
+            if(btn) {
+                btn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    var phone = this.dataset.phone || '';
+                    if(phone) {
+                        this.textContent = phone;
+                        this.href = 'tel:' + phone;
+                    }
+                });
+            }
+        });
+        function shareListing(){
+            var url = window.location.href;
+            if(navigator.share){
+                navigator.share({title: document.title, url: url});
+            } else {
+                navigator.clipboard.writeText(url).then(function(){
+                    alert('Link copied to clipboard');
+                });
+            }
+        }
+        function toggleWishlist() {
+            const panel = document.getElementById('wishlistPanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                fetch('/api/wishlist').then(r=>r.json()).then(data=>{
+                    const container = document.getElementById('wishlistContent');
+                    if (data.length===0) {
+                        container.innerHTML = '<p class="empty-message">No items in your wishlist yet</p>';
+                    } else {
+                        let html='';
+                        data.forEach(item=>{ html += `<div class="wishlist-item d-flex align-items-center mb-3">
+                                <img class="wishlist-item-image" src="/${item.img}" alt="" />
+                                <div class="wishlist-item-info ms-2">
+                                    <a href="/listing/${item.id}" class="wishlist-item-name">${item.title}</a>
+                                    <div class="wishlist-item-price">₹${item.price}</div>
+                                </div>
+                              </div>`; });
+                        container.innerHTML = html;
+                    }
+                    document.getElementById('wishlistBadge').textContent = data.length;
+                });
+            }
         }
     </script>
 </body>

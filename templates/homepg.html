@@ -536,7 +536,7 @@
 
         .category-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -554,13 +554,14 @@
 
         .category-item:hover {
             transform: translateY(-8px);
-            color: #0066cc;
         }
 
         .category-icon-box {
-            width: 70px;
-            height: 70px;
+            width: 100px;
+            height: 100px;
             background-color: #f5f5f5;
+            background-size: cover;
+            background-position: center;
             border: 2px solid #e8e8e8;
             border-radius: 10px;
             display: flex;
@@ -568,10 +569,10 @@
             justify-content: center;
             font-size: 2rem;
             transition: all 0.3s ease;
+            overflow: hidden;
         }
 
         .category-item:hover .category-icon-box {
-            background-color: #f0f5ff;
             border-color: #0066cc;
             box-shadow: 0 5px 15px rgba(0, 102, 204, 0.15);
         }
@@ -586,6 +587,109 @@
 
         .category-item:hover .category-name {
             color: #0066cc;
+        }
+
+        /* MODAL STYLES */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .modal.hidden {
+            display: none;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #999;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        #modalTitle {
+            font-weight: 700;
+            color: #002f34;
+            margin-bottom: 20px;
+            padding-right: 30px;
+        }
+
+        .subcategory-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .subcategory-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .subcategory-item:hover {
+            border-color: #0066cc;
+            background: #f0f5ff;
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0, 102, 204, 0.1);
+        }
+
+        .subcategory-icon {
+            font-size: 2rem;
+            color: #0066cc;
+        }
+
+        .subcategory-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        @media (max-width: 480px) {
+            .subcategory-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
         }
 
         /* OLD CATEGORY BOX STYLES - KEPT FOR REFERENCE */
@@ -938,7 +1042,7 @@
                 <li class="nav-item wishlist-nav">
                     <button class="navbar-icon-btn wishlist-btn" onclick="toggleWishlist()" title="Wishlist">
                         <i class="fas fa-heart"></i>
-                        <span class="navbar-icon-badge" id="wishlistBadge">0</span>
+                        <span class="navbar-icon-badge" id="wishlistBadge">{{ wishlist_count }}</span>
                     </button>
                 </li>
                 <li class="nav-item chat-nav">
@@ -998,73 +1102,22 @@
     <div class="container">
         <h2 class="categories-title"><i class="fas fa-th"></i> Browse Categories</h2>
         
-        <div class="category-grid">
-            <!-- Mobile Phones -->
-            <a href="categories.html" class="category-item" onclick="selectCategory('Mobile')">
-                <div class="category-icon-box">
-                    <i class="fas fa-mobile-alt"></i>
-                </div>
-                <div class="category-name">Mobile Phones</div>
-            </a>
-
-            <!-- Computers -->
-            <a href="categories.html" class="category-item" onclick="selectCategory('Computers')">
-                <div class="category-icon-box">
-                    <i class="fas fa-laptop"></i>
-                </div>
-                <div class="category-name">Computers</div>
-            </a>
-
-            <!-- Electronics -->
-            <a href="categories.html" class="category-item" onclick="selectCategory('Electronics')">
-                <div class="category-icon-box">
-                    <i class="fas fa-microchip"></i>
-                </div>
-                <div class="category-name">Electronics</div>
-            </a>
-
-            <!-- Cameras -->
-            <a href="categories.html" class="category-item" onclick="selectCategory('Cameras')">
-                <div class="category-icon-box">
-                    <i class="fas fa-camera"></i>
-                </div>
-                <div class="category-name">Cameras</div>
-            </a>
-
-            <!-- Games -->
-            <a href="categories.html" class="category-item" onclick="selectCategory('Games')">
-                <div class="category-icon-box">
-                    <i class="fas fa-gamepad"></i>
-                </div>
-                <div class="category-name">Games</div>
-            </a>
-
-            <!-- Appliances -->
-            <a href="categories.html" class="category-item" onclick="selectCategory('Appliances')">
-                <div class="category-icon-box">
-                    <i class="fas fa-microchip"></i>
-                </div>
-                <div class="category-name">Appliances</div>
-            </a>
-
-            <!-- Audio -->
-            <a href="categories.html" class="category-item" onclick="selectCategory('Audio')">
-                <div class="category-icon-box">
-                    <i class="fas fa-headphones"></i>
-                </div>
-                <div class="category-name">Audio</div>
-            </a>
-
-            <!-- View All -->
-            <a href="categories.html" class="category-item">
-                <div class="category-icon-box">
-                    <i class="fas fa-arrow-right"></i>
-                </div>
-                <div class="category-name">View All</div>
-            </a>
+        <div class="category-grid" id="categoryGrid">
+            <!-- Populated by JS from /api/categories -->
         </div>
     </div>
 </section>
+
+<!-- SUBCATEGORY MODAL -->
+<div id="subcategoryModal" class="modal hidden">
+    <div class="modal-content">
+        <button class="modal-close" onclick="closeSubcategoryModal()">&times;</button>
+        <h3 id="modalTitle">Subcategories</h3>
+        <div class="subcategory-grid" id="subcategoryGrid">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+</div>
 
 <!-- FEATURED LISTINGS SECTION -->
 <section class="featured-listings-section">
@@ -1150,7 +1203,7 @@
         </div>
 
         <div class="footer-bottom">
-            <p>&copy; 2024 ReGear. All Rights Reserved. | Buy & Sell Used Tech with Confidence</p>
+            <p>&copy; 2026 ReGear. All Rights Reserved. | Buy & Sell Used Tech with Confidence</p>
         </div>
     </div>
 </footer>
@@ -1460,89 +1513,128 @@
     }
 
     // Initialize on page load
-    window.addEventListener('load', initLocationSearch);
+    window.addEventListener('load', function(){
+        initLocationSearch();
+        loadCategories();
+    });
+
+    // CATEGORIES FUNCTIONALITY
+    function loadCategories() {
+        fetch('/api/categories')
+            .then(r => r.json())
+            .then(data => {
+                const grid = document.getElementById('categoryGrid');
+                let html = '';
+                
+                // Convert object to sorted array
+                const cats = Object.entries(data).sort((a, b) => a[0].localeCompare(b[0]));
+                
+                cats.forEach(([catName, catData]) => {
+                    const bgImage = catData.image ? `background-image: url('${catData.image}');` : '';
+                    html += `<div class="category-item" onclick="showSubcategories('${catName}', ${JSON.stringify(catData.subcategories).replace(/'/g, "&apos;")})">
+                                <div class="category-icon-box" style="${bgImage}"></div>
+                                <div class="category-name">${catName}</div>
+                            </div>`;
+                });
+                
+                grid.innerHTML = html;
+            })
+            .catch(e => console.log('Error loading categories:', e));
+    }
+
+    function showSubcategories(categoryName, subcats) {
+        const modal = document.getElementById('subcategoryModal');
+        const title = document.getElementById('modalTitle');
+        const grid = document.getElementById('subcategoryGrid');
+        
+        title.textContent = categoryName;
+        
+        if (subcats && subcats.length > 0) {
+            let html = '';
+            subcats.forEach(sub => {
+                html += `<a href="/browse?category=${encodeURIComponent(categoryName)}" class="subcategory-item">
+                            <div class="subcategory-icon"><i class="fas fa-box"></i></div>
+                            <div class="subcategory-name">${sub.name}</div>
+                        </a>`;
+            });
+            grid.innerHTML = html;
+        } else {
+            grid.innerHTML = '<p class="text-center text-muted">No subcategories available</p>';
+        }
+        
+        modal.classList.remove('hidden');
+    }
+
+    function closeSubcategoryModal() {
+        document.getElementById('subcategoryModal').classList.add('hidden');
+    }
+
+    // Close modal on background click
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('subcategoryModal');
+        if (e.target === modal) {
+            closeSubcategoryModal();
+        }
+    });
+
 
     // ===== WISHLIST & CHAT FUNCTIONALITY =====
-    let wishlistItems = [];
-    let chatMessages = [];
     let unreadCount = 0;
 
-    // Initialize Wishlist and Chat
     function initWishlistChat() {
-        loadWishlist();
+        // chat initialization still uses localStorage earlier logic
         loadChat();
-        updateWishlistBadge();
         updateChatBadge();
     }
 
     function toggleWishlist() {
         const panel = document.getElementById('wishlistPanel');
         const chatPanel = document.getElementById('chatPanel');
-        
-        // Close chat if open
         if (!chatPanel.classList.contains('hidden')) {
             chatPanel.classList.add('hidden');
         }
-        
         panel.classList.toggle('hidden');
         if (!panel.classList.contains('hidden')) {
-            displayWishlist();
+            fetchWishlist();
         }
+    }
+
+    function fetchWishlist() {
+        fetch('/api/wishlist')
+            .then(r => r.json())
+            .then(data => {
+                const container = document.getElementById('wishlistContent');
+                if (data.length === 0) {
+                    container.innerHTML = '<p class="empty-message">No items in your wishlist yet</p>';
+                } else {
+                    let html = '';
+                    data.forEach(item => {
+                        html += `<div class="wishlist-item d-flex align-items-center mb-3">
+                                    <img class="wishlist-item-image" src="/${item.img}" alt="" />
+                                    <div class="wishlist-item-info ms-2">
+                                        <a href="/listing/${item.id}" class="wishlist-item-name">${item.title}</a>
+                                        <div class="wishlist-item-price">₹${item.price}</div>
+                                    </div>
+                                 </div>`;
+                    });
+                    container.innerHTML = html;
+                }
+                document.getElementById('wishlistBadge').textContent = data.length;
+            });
     }
 
     function toggleChat() {
         const panel = document.getElementById('chatPanel');
         const wishlistPanel = document.getElementById('wishlistPanel');
-        
-        // Close wishlist if open
         if (!wishlistPanel.classList.contains('hidden')) {
             wishlistPanel.classList.add('hidden');
         }
-        
         panel.classList.toggle('hidden');
         if (!panel.classList.contains('hidden')) {
             displayChat();
             unreadCount = 0;
             updateChatBadge();
         }
-    }
-
-    function loadWishlist() {
-        const stored = localStorage.getItem('userWishlist');
-        wishlistItems = stored ? JSON.parse(stored) : [];
-    }
-
-    function loadChat() {
-        const stored = localStorage.getItem('userChat');
-        chatMessages = stored ? JSON.parse(stored) : [];
-        // Load unread count
-        const unread = localStorage.getItem('unreadChatCount');
-        unreadCount = unread ? parseInt(unread) : 0;
-    }
-
-    function addToWishlist(productName, productPrice, productImage) {
-        const item = {
-            id: Date.now(),
-            name: productName,
-            price: productPrice,
-            image: productImage,
-            addedDate: new Date().toISOString()
-        };
-
-        wishlistItems.push(item);
-        localStorage.setItem('userWishlist', JSON.stringify(wishlistItems));
-        updateWishlistBadge();
-        
-        // Show toast notification
-        showToast(`Added to wishlist: ${productName}`, 'success');
-    }
-
-    function removeFromWishlist(itemId) {
-        wishlistItems = wishlistItems.filter(item => item.id !== itemId);
-        localStorage.setItem('userWishlist', JSON.stringify(wishlistItems));
-        updateWishlistBadge();
-        displayWishlist();
-        showToast('Removed from wishlist', 'info');
     }
 
     function displayWishlist() {

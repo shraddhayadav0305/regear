@@ -3,186 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Post an Ad - ReGear</title>
-    <!-- Bootstrap CSS -->
+    <title>Chat - ReGear</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- Custom CSS -->
-    <link href="css/style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Poppins', sans-serif; }
+        body { background-color: #f8f9fa; }
+        .navbar { background-color: #fff !important; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .navbar-brand { font-size: 2rem; font-weight: 800; color: #002f34 !important; }
+        .chat-summary { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .chat-summary img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; }
+        .chat-summary .price { font-size: 1.4rem; font-weight: 700; color: #0066cc; }
+        .chat-summary .badges .badge { margin-right: 5px; }
+        .chat-container { background: white; border-radius: 12px; height: 400px; padding: 20px; overflow-y: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .chat-message { max-width: 75%; margin-bottom: 10px; position: relative; padding: 10px 15px; border-radius: 20px; }
+        .chat-message.buyer { background: #0066cc; color: white; margin-left: auto; text-align: right; }
+        .chat-message.seller { background: #f1f1f1; color: #333; margin-right: auto; }
+        .chat-message .time { font-size: 0.75rem; color: #666; margin-top: 4px; }
+        .message-input { position: sticky; bottom: 0; background: white; padding-top: 10px; }
+        .message-input .form-control { border-radius: 20px; }
+        .chat-footer { margin-top: 10px; }
+    </style>
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
-        <div class="container">
-            <a class="navbar-brand" href="index.html">
-                <i class="fas fa-recycle me-2"></i>ReGear
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.html">Home</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center gap-3">
-                    <div class="dropdown">
-                        <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
-                            <img src="https://ui-avatars.com/api/?name=User&background=random" alt="" width="32" height="32" class="rounded-circle me-2">
-                            <strong>My Account</strong>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
-                            <li><a class="dropdown-item" href="dashboard.html">Dashboard</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="index.html">Sign out</a></li>
-                        </ul>
-                    </div>
-                </div>
+<nav class="navbar navbar-expand-lg navbar-light sticky-top">
+    <div class="container-lg">
+        <a class="navbar-brand" href="/">
+            <i class="fas fa-recycle me-2"></i>ReGear
+        </a>
+    </div>
+</nav>
+
+<div class="container-lg mt-4">
+    <!-- product summary card -->
+    <div class="chat-summary mb-4">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                {% set main_image = (listing.photos.split(',')[0] if listing.photos else '') %}
+                {% if main_image %}
+                    <img src="/{{ main_image }}" alt="{{ listing.title }}">
+                {% else %}
+                    <div style="width:80px;height:80px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;
+                                border-radius:8px;"><i class="fas fa-image"></i></div>
+                {% endif %}
             </div>
-        </div>
-    </nav>
-
-    <div class="container my-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body p-5">
-                        <h2 class="fw-bold mb-4 text-center">Post Your Ad</h2>
-                        
-                        <form onsubmit="handlePostAd(event)">
-                            <!-- Section 1: Product Details -->
-                            <h5 class="fw-bold mb-3 border-bottom pb-2">Include some details</h5>
-                            
-                            <div class="mb-4">
-                                <label class="form-label fw-bold">Ad Title</label>
-                                <input type="text" class="form-control" placeholder="e.g. MacBook Pro M1 2020 8GB RAM" required>
-                                <div class="form-text">Mention the key features of your item (e.g. brand, model, age, type)</div>
-                            </div>
-
-                            <div class="row mb-4">
-                                <div class="col-md-6">
-                                    <label class="form-label fw-bold">Category</label>
-                                    <select class="form-select" required>
-                                        <option value="" selected disabled>Select Category</option>
-                                        <option>Laptops</option>
-                                        <option>Desktops</option>
-                                        <option>Components (GPU, CPU, RAM)</option>
-                                        <option>Peripherals (Keyboard, Mouse)</option>
-                                        <option>Monitors</option>
-                                        <option>Audio</option>
-                                        <option>Other</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label fw-bold">Condition</label>
-                                    <select class="form-select" required>
-                                        <option value="" selected disabled>Select Condition</option>
-                                        <option>Brand New</option>
-                                        <option>Like New</option>
-                                        <option>Used - Good</option>
-                                        <option>Used - Fair</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="mb-4">
-                                <label class="form-label fw-bold">Description</label>
-                                <textarea class="form-control" rows="5" placeholder="Describe your item in detail. Include condition, reason for selling, and any defects." required></textarea>
-                            </div>
-
-                            <!-- Section 2: Price -->
-                            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-5">Set a price</h5>
-                            <div class="mb-4">
-                                <label class="form-label fw-bold">Price ($)</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" placeholder="0.00" required>
-                                </div>
-                            </div>
-
-                            <!-- Section 3: Photos -->
-                            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-5">Upload up to 5 photos</h5>
-                            <div class="mb-4">
-                                <div class="border rounded p-5 text-center bg-light" style="border-style: dashed !important; border-width: 2px !important;">
-                                    <i class="fas fa-camera fa-3x text-muted mb-3"></i>
-                                    <p class="mb-2">Drag and drop photos here</p>
-                                    <p class="text-muted small">or</p>
-                                    <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('fileInput').click()">Browse Photos</button>
-                                    <input type="file" id="fileInput" class="d-none" multiple accept="image/*" onchange="previewPhotos(this)">
-                                </div>
-                                <div id="photoPreview" class="d-flex gap-2 mt-3 overflow-auto">
-                                    <!-- Preview images will appear here -->
-                                </div>
-                            </div>
-
-                            <!-- Section 4: Contact Details -->
-                            <h5 class="fw-bold mb-3 border-bottom pb-2 mt-5">Review your details</h5>
-                            <div class="row mb-4">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label fw-bold">Name</label>
-                                        <input type="text" class="form-control" value="John Doe" disabled>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label fw-bold">Phone Number</label>
-                                        <input type="tel" class="form-control" value="+1 234 567 8900">
-                                        <div class="form-text">Buyers will see this number</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-warning btn-lg fw-bold text-dark">Post Now</button>
-                            </div>
-                        </form>
-                    </div>
+            <div class="col">
+                <h5 class="mb-1">{{ listing.title }}</h5>
+                <p class="price mb-1">₹{{ listing.price }}</p>
+                <div class="badges mb-1">
+                    <span class="badge bg-secondary">{{ listing.item_condition or 'Used' }}</span>
+                    <span class="badge bg-{{ 'danger' if listing.status=='sold' else 'success' }}">{{ listing.status.capitalize() }}</span>
                 </div>
+                <p class="mb-1"><i class="fas fa-map-marker-alt"></i> {{ listing.location }}</p>
+                <p class="mb-0 small">Seller: {{ listing.seller_name }} {% if listing.seller_rating %}⭐{{ listing.seller_rating }}{% endif %} <br><small>Last seen {{ listing.seller_last_seen or 'Unknown' }}</small></p>
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/main.js"></script>
-    <script>
-        function previewPhotos(input) {
-            const container = document.getElementById('photoPreview');
-            container.innerHTML = ''; // Clear existing
-            
-            if (input.files) {
-                Array.from(input.files).forEach(file => {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const img = document.createElement('img');
-                        img.src = e.target.result;
-                        img.className = 'rounded border';
-                        img.style.width = '100px';
-                        img.style.height = '100px';
-                        img.style.objectFit = 'cover';
-                        container.appendChild(img);
-                    }
-                    reader.readAsDataURL(file);
-                });
-            }
-        }
+    <!-- chat messages -->
+    <div class="chat-container" id="chatArea">
+        {% for msg in messages %}
+            <div class="chat-message {% if msg.sender_id == session['user_id'] %}buyer{% else %}seller{% endif %}">
+                <div class="text">{{ msg.content }}</div>
+                <div class="time">{{ msg.created_at.strftime('%d %b %Y %H:%M') }}</div>
+            </div>
+        {% endfor %}
+    </div>
 
-        function handlePostAd(event) {
-            event.preventDefault();
-            const btn = event.target.querySelector('button[type="submit"]');
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Posting...';
-            btn.disabled = true;
+    <!-- input area -->
+    <div class="message-input">
+        <form method="post">
+            <div class="input-group">
+                <input type="text" name="message" class="form-control" placeholder="Type your message..." required>
+                <button class="btn btn-primary" type="submit">Send</button>
+                <button class="btn btn-outline-secondary" type="button"><i class="fas fa-paperclip"></i></button>
+            </div>
+        </form>
+    </div>
 
-            setTimeout(() => {
-                alert('Ad posted successfully! Redirecting to dashboard...');
-                window.location.href = 'dashboard.html';
-            }, 1500);
-        }
-    </script>
+    {% if session['user_id'] == conversation.seller_id and listing.status != 'sold' %}
+        <div class="chat-footer">
+            <form method="post" action="{{ url_for('mark_sold', conv_id=conversation.id) }}">
+                <button class="btn btn-danger">Mark as Sold</button>
+            </form>
+        </div>
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // auto-scroll to bottom when page loads
+    var chatArea = document.getElementById('chatArea');
+    if(chatArea) { chatArea.scrollTop = chatArea.scrollHeight; }
+</script>
 </body>
 </html>
-
-

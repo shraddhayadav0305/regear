@@ -128,7 +128,7 @@ Your ReGear system comes with comprehensive documentation covering every aspect 
 1. Read: **VISUAL_ARCHITECTURE.md** (understand the diagrams)
 2. Read: **FORM_FIELD_MAPPING.md** (understand field connections)
 3. Read: **CONNECTIVITY_COMPLETE.md** (understand the system)
-4. Review code in: `app.py`, `register.html`, `login.html`, `dashboard.html`
+3. Review code in: `app.py`, `register.html` (seller package/fee logic added), `login.html`, `dashboard.html`
 
 ### Path 4: Need to Debug Something? (as needed)
 1. Read: **CONNECTIVITY_VERIFICATION.md** (find your issue)

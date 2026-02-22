@@ -165,7 +165,7 @@ def manage_users():
         cursor = conn.cursor(dictionary=True)
 
         # Build query with filters
-        query = "SELECT id, username, email, role, phone, created_at FROM users WHERE role != 'admin'"
+        query = "SELECT id, username, email, role, phone, created_at, seller_package, registration_fee FROM users WHERE role != 'admin'"
         params = []
 
         if search:
@@ -176,11 +176,23 @@ def manage_users():
             query += " AND role = %s"
             params.append(role_filter)
 
-        # Get total count
-        count_query = query.replace("SELECT id, username, email, role, phone, created_at", "SELECT COUNT(*) as total")
-        cursor.execute(count_query, params)
-        row = cursor.fetchone()
-        total = row['total'] if row else 0
+        # Get total count: build a COUNT(*) query using the same filters to avoid
+        # mixing aggregated and non-aggregated columns (prevents ONLY_FULL_GROUP_BY errors)
+        try:
+            count_query = "SELECT COUNT(*) as total FROM users WHERE role != 'admin'"
+            count_params = []
+            if search:
+                count_query += " AND (username LIKE %s OR email LIKE %s)"
+                count_params.extend([f"%{search}%", f"%{search}%"])
+            if role_filter:
+                count_query += " AND role = %s"
+                count_params.append(role_filter)
+
+            cursor.execute(count_query, count_params)
+            row = cursor.fetchone()
+            total = row['total'] if row else 0
+        except Exception:
+            total = 0
 
         # Get paginated results
         offset = (page - 1) * items_per_page
@@ -217,7 +229,8 @@ def view_user(user_id):
 
         # Get user details
         cursor.execute("""
-            SELECT id, username, email, phone, role, created_at, warning_count, suspension_reason
+            SELECT id, username, email, phone, role, created_at, warning_count, suspension_reason,
+                   seller_package, registration_fee
             FROM users WHERE id = %s
         """, (user_id,))
         user = cursor.fetchone()

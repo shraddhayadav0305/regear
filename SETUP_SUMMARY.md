@@ -51,6 +51,14 @@
   - phone (VARCHAR)
   - password (VARCHAR - hashed)
   - created_at (DATETIME with timestamp)
+  - seller_package (VARCHAR) - package selection for sellers
+  - registration_fee (DECIMAL) - registration fee charged for the package
+
+  > run the migration script `add_seller_package_columns.py` to update existing databases
+  - **seller_package** (VARCHAR) – the package chosen when a seller registers
+  - **registration_fee** (DECIMAL) – fee amount tied to the chosen package
+
+  > After pulling the latest code run `python add_seller_package_columns.py` to add the new columns if they don’t already exist.
 
 ### 4. Security Implementation ✅
 - **Password Security:**

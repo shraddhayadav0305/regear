@@ -110,6 +110,13 @@ def home():
         return render_template("homepg.html", featured_listings=[])
 
 
+# fee mapping for seller packages (package -> ₹ fee)
+PACKAGE_FEES = {
+    "10": 199.00,
+    "15": 349.00,
+    "20": 499.00,
+}
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -118,6 +125,21 @@ def register():
         email = request.form.get("email")
         password = request.form.get("password")
         phone = request.form.get("phone")
+
+        # additional seller fields
+        seller_package = None
+        registration_fee = None
+        if role == "seller":
+            # normalize package value coming from the form
+            seller_package = request.form.get("package")
+            if seller_package:
+                seller_package = seller_package.strip()
+            # validate package selection
+            if not seller_package or str(seller_package) not in PACKAGE_FEES:
+                flash("❌ Please select a valid seller package", "error")
+                return redirect(url_for("register"))
+            # store fee as numeric
+            registration_fee = float(PACKAGE_FEES.get(str(seller_package)))
 
         if not username or not email or not password:
             flash("❌ All fields are required", "error")
@@ -140,9 +162,12 @@ def register():
             hashed_password = hash_password(password)
 
             cursor.execute("""
-                INSERT INTO users (role, username, email, password, phone, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (role, username, email, hashed_password, phone, datetime.now()))
+                INSERT INTO users (role, username, email, password, phone, created_at, seller_package, registration_fee)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                role, username, email, hashed_password, phone, datetime.now(),
+                seller_package, registration_fee
+            ))
 
             conn.commit()
             cursor.close()
@@ -155,7 +180,8 @@ def register():
             flash(f"❌ Error: {str(e)}", "error")
             return redirect(url_for("register"))
 
-    return render_template("register.html")
+    # send package mapping for sellers so template can build options
+    return render_template("register.html", package_fees=PACKAGE_FEES)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -351,7 +377,47 @@ def reverse_geocode():
 
 @app.route("/api/categories", methods=["GET"])
 def get_categories():
-    """API endpoint to get categories from database"""
+    """API endpoint to get categories from database with images"""
+    
+    def create_svg_placeholder(cat_name, color):
+        """Create SVG placeholder with category name"""
+        svg = f'''<svg width="150" height="150" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:{color};stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:{color}dd;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+            <rect width="150" height="150" fill="url(#grad)"/>
+            <text x="75" y="75" font-size="11" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle" 
+                  font-family="Arial, sans-serif" word-spacing="2" lengthAdjust="spacing" textLength="140">
+                {cat_name}
+            </text>
+        </svg>'''
+        import base64
+        svg_encoded = base64.b64encode(svg.encode()).decode()
+        return f"data:image/svg+xml;base64,{svg_encoded}"
+    
+    # Category image mapping - using local SVG placeholders with colors
+    category_images = {
+        "Mobile Phones": "/static/images/mobile phones.png",  # custom mobile phone image
+        "Laptops & Computers": "/static/images/lap.png",  # custom laptop image
+        "Cameras & DSLR": "/static/images/dslr-camera-logo-design-png.png",  # User's camera image
+        "TVs & Home Entertainment": create_svg_placeholder("📺 TVs & Home", "#22543d"),
+        "Gaming Consoles": "/static/images/gaming console.png",  # user image for gaming consoles
+        "Speakers & Headphones": create_svg_placeholder("🔊 Audio", "#6b2c2c"),
+        "Computer Accessories": "/static/images/computer accessories.png",  # User's computer accessories image
+        # if user supplies a custom image, serve the file; otherwise fall back to SVG placeholder
+        "Electronic Components": "/static/images/electronic component.jpg",  # custom image placed by user
+        "Tablets": create_svg_placeholder("📱 Tablets", "#c53030"),
+        "Smart Watches": create_svg_placeholder("⌚ Watches", "#97266d"),
+        "Printers & Scanners": create_svg_placeholder("🖨️ Printers", "#2d3748"),
+        "Monitors & Displays": "/static/images/Monitors & Displays.webp",  # custom monitors image
+        "Smart Home Devices": create_svg_placeholder("🏠 Smart Home", "#354e78"),
+        "Networking Devices": create_svg_placeholder("🌐 Network", "#6b3517"),
+        "Storage Devices": create_svg_placeholder("💾 Storage", "#c53b3b")
+    }
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -361,6 +427,7 @@ def get_categories():
         result = {}
         for cat in categories:
             cat_id = cat['id']
+            cat_name = cat['name']
             # Fetch subcategories for this category
             cursor.execute(
                 "SELECT id, name FROM subcategories WHERE category_id = %s ORDER BY name",
@@ -368,8 +435,16 @@ def get_categories():
             )
             subcats = cursor.fetchall()
             
-            result[cat['name']] = {
+            # Get image or create one if not in mapping
+            cat_image = category_images.get(cat_name)
+            if not cat_image:
+                # Create SVG for unmapped categories
+                default_color = "#7c3aed"  # Purple fallback
+                cat_image = create_svg_placeholder(f"📦 {cat_name}", default_color)
+            
+            result[cat_name] = {
                 'icon': cat['icon'],
+                'image': cat_image,
                 'id': cat_id,
                 'subcategories': [{'id': s['id'], 'name': s['name']} for s in subcats]
             }
@@ -635,6 +710,182 @@ def browse():
         flash(f"❌ Error loading listings: {str(e)}", "error")
         return redirect(url_for("home"))
 
+# ---------- Helper routines for conversations/messages ----------
+
+def get_or_create_conversation(listing_id, buyer_id):
+    """Return existing conversation id for buyer+listing, or create a new one.
+    Also inserts a default first message and notifies the seller."""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # see if conversation already exists
+    cursor.execute(
+        "SELECT * FROM conversations WHERE listing_id=%s AND buyer_id=%s",
+        (listing_id, buyer_id)
+    )
+    conv = cursor.fetchone()
+
+    if conv:
+        conv_id = conv['id']
+    else:
+        # fetch seller from listing
+        cursor.execute("SELECT user_id FROM listings WHERE id=%s", (listing_id,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return None
+        seller_id = row['user_id']
+
+        cursor.execute(
+            "INSERT INTO conversations (listing_id, buyer_id, seller_id, created_at) VALUES (%s,%s,%s,NOW())",
+            (listing_id, buyer_id, seller_id)
+        )
+        conv_id = cursor.lastrowid
+        conn.commit()
+
+        # default initial message from buyer
+        default_msg = "Hi, I am interested in this product. Is it still available?"
+        cursor.execute(
+            "INSERT INTO messages (conversation_id, sender_id, content, created_at) VALUES (%s,%s,%s,NOW())",
+            (conv_id, buyer_id, default_msg)
+        )
+        conn.commit()
+
+        # notify seller (simple notification table)
+        try:
+            cursor.execute(
+                "INSERT INTO notifications (user_id, message, is_read, created_at) VALUES (%s,%s,0,NOW())",
+                (seller_id, "New buyer interested in your product.")
+            )
+            conn.commit()
+        except Exception:
+            # ignore; notification table may not exist yet
+            pass
+
+    cursor.close()
+    conn.close()
+    return conv_id
+
+
+@app.route("/buy/<int:listing_id>")
+@login_required
+def buy_now(listing_id):
+    """Entry point when user clicks Buy Now. If conversation already
+    exists we open it; otherwise create a new one and redirect."""
+    user_id = session.get('user_id')
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, user_id, status FROM listings WHERE id=%s", (listing_id,))
+        listing = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not listing:
+            flash("❌ Listing not found", "error")
+            return redirect(url_for("browse"))
+
+        if listing['status'] == 'sold':
+            flash("❌ This item has already been sold", "error")
+            return redirect(url_for('view_listing', listing_id=listing_id))
+
+        # buyer cannot buy their own listing
+        if listing['user_id'] == user_id:
+            flash("❌ You cannot start a conversation on your own listing", "error")
+            return redirect(url_for('view_listing', listing_id=listing_id))
+
+        conv_id = get_or_create_conversation(listing_id, user_id)
+        if not conv_id:
+            flash("❌ Could not start conversation", "error")
+            return redirect(url_for('view_listing', listing_id=listing_id))
+
+        return redirect(url_for('chat_page', conv_id=conv_id))
+    except Exception as e:
+        flash(f"❌ Error opening chat: {e}", "error")
+        return redirect(url_for('view_listing', listing_id=listing_id))
+
+
+@app.route("/chat/<int:conv_id>", methods=["GET", "POST"])
+@login_required
+def chat_page(conv_id):
+    """Render conversation page or handle a new message post."""
+    user_id = session.get('user_id')
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # verify conversation exists and user is participant
+    cursor.execute("SELECT * FROM conversations WHERE id=%s", (conv_id,))
+    conv = cursor.fetchone()
+    if not conv or user_id not in (conv['buyer_id'], conv['seller_id']):
+        cursor.close()
+        conn.close()
+        flash("❌ Conversation not found or access denied", "error")
+        return redirect(url_for('home'))
+
+    # fetch listing details for summary card
+    cursor.execute(
+        "SELECT l.*, u.username as seller_name FROM listings l JOIN users u ON l.user_id=u.id WHERE l.id=%s",
+        (conv['listing_id'],)
+    )
+    listing = cursor.fetchone()
+
+    if request.method == 'POST':
+        msg = request.form.get('message')
+        if msg:
+            cursor.execute(
+                "INSERT INTO messages (conversation_id, sender_id, content, created_at) VALUES (%s,%s,%s,NOW())",
+                (conv_id, user_id, msg)
+            )
+            conn.commit()
+            # update last_message_at
+            cursor.execute("UPDATE conversations SET last_message_at=NOW() WHERE id=%s", (conv_id,))
+            conn.commit()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('chat_page', conv_id=conv_id))
+
+    # GET path: load messages
+    cursor.execute(
+        "SELECT m.*, u.username FROM messages m JOIN users u ON m.sender_id=u.id WHERE m.conversation_id=%s ORDER BY m.created_at ASC",
+        (conv_id,)
+    )
+    messages = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template('chat.html', conversation=conv, messages=messages, listing=listing)
+
+
+@app.route("/chat/<int:conv_id>/mark_sold", methods=["POST"])
+@login_required
+def mark_sold(conv_id):
+    user_id = session.get('user_id')
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM conversations WHERE id=%s", (conv_id,))
+    conv = cursor.fetchone()
+    if not conv or conv['seller_id'] != user_id:
+        cursor.close()
+        conn.close()
+        flash("❌ You are not authorized to mark this item sold", "error")
+        return redirect(url_for('home'))
+
+    # update listing status
+    cursor.execute("UPDATE listings SET status='sold' WHERE id=%s", (conv['listing_id'],))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    flash("✅ Listing marked as sold", "success")
+    return redirect(url_for('chat_page', conv_id=conv_id))
+
+
 @app.route("/listing/<int:listing_id>")
 def view_listing(listing_id):
     """View individual listing details"""
@@ -643,7 +894,8 @@ def view_listing(listing_id):
         cursor = conn.cursor(dictionary=True)
         
         cursor.execute("""
-            SELECT l.*, u.username, u.phone as seller_phone, u.email as seller_email
+            SELECT l.*, u.username, u.phone as seller_phone, u.email as seller_email,
+                   u.created_at as seller_joined
             FROM listings l
             JOIN users u ON l.user_id = u.id
             WHERE l.id=%s
@@ -656,6 +908,21 @@ def view_listing(listing_id):
         if not listing:
             flash("❌ Listing not found", "error")
             return redirect(url_for("browse"))
+
+        # wishlist state from session
+        wl = session.get('wishlist', [])
+        listing['in_wishlist'] = listing_id in wl
+
+        # add extra seller info: total active listings
+        try:
+            conn = get_db_connection()
+            cur2 = conn.cursor()
+            cur2.execute("SELECT COUNT(*) FROM listings WHERE user_id=%s AND status='active'", (listing['user_id'],))
+            listing['seller_listings_count'] = cur2.fetchone()[0]
+            cur2.close()
+            conn.close()
+        except Exception:
+            listing['seller_listings_count'] = 0
 
         # Only public if admin-approved, unless owner or admin
         if listing.get('approval_status') != 'approved':
@@ -670,6 +937,92 @@ def view_listing(listing_id):
     except Exception as e:
         flash(f"❌ Error loading listing: {str(e)}", "error")
         return redirect(url_for("browse"))
+
+@app.route("/wishlist/toggle/<int:listing_id>")
+@login_required
+
+def toggle_wishlist(listing_id):
+    """Add or remove a listing from the user's wishlist stored in session"""
+    wl = session.get('wishlist', [])
+    if listing_id in wl:
+        wl.remove(listing_id)
+        action = 'removed'
+    else:
+        wl.append(listing_id)
+        action = 'added'
+    session['wishlist'] = wl
+    flash(f"✅ Wishlist {action}", "success")
+    return redirect(url_for('view_listing', listing_id=listing_id))
+
+
+@app.route("/api/wishlist")
+@login_required
+
+def api_wishlist():
+    """Return JSON array of wishlisted listings for current session"""
+    wl = session.get('wishlist', [])
+    result = []
+    if wl:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            format_ids = ','.join(['%s'] * len(wl))
+            query = f"SELECT id, title, price, photos FROM listings WHERE id IN ({format_ids}) AND status='active'"
+            cursor.execute(query, tuple(wl))
+            rows = cursor.fetchall()
+            for r in rows:
+                main_img = r['photos'].split(',')[0] if r.get('photos') else ''
+                result.append({
+                    'id': r['id'],
+                    'title': r['title'],
+                    'price': r['price'],
+                    'img': main_img
+                })
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+    return jsonify(result)
+
+
+@app.context_processor
+
+def inject_wishlist_count():
+    wl = session.get('wishlist', [])
+    return {'wishlist_count': len(wl)}
+
+
+@app.route("/seller/<int:user_id>")
+def seller_profile(user_id):
+    """Display public seller profile and their listings"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, username, created_at, role, phone, email FROM users WHERE id=%s", (user_id,))
+        seller = cursor.fetchone()
+        if not seller:
+            cursor.close()
+            conn.close()
+            flash("❌ Seller not found", "error")
+            return redirect(url_for("browse"))
+
+        # count active listings
+        cursor.execute("SELECT COUNT(*) as cnt FROM listings WHERE user_id=%s AND status='active'", (user_id,))
+        seller['active_listings'] = cursor.fetchone()['cnt']
+        # placeholder follower/following
+        seller['followers'] = 0
+        seller['following'] = 0
+
+        # fetch seller's active listings
+        cursor.execute("SELECT * FROM listings WHERE user_id=%s AND status='active' ORDER BY created_at DESC", (user_id,))
+        listings = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        return render_template('seller_profile.html', seller=seller, listings=listings)
+    except Exception as e:
+        flash(f"❌ Error loading seller profile: {e}", "error")
+        return redirect(url_for('browse'))
 
 @app.route("/saved")
 @login_required
