@@ -1,0 +1,282 @@
+"""
+New Authentication Routes for OLX Model
+- Single unified registration for all users
+- Users can both buy and sell without role selection
+- No upfront payment or subscription required
+"""
+
+# ===========================
+# NEW REGISTRATION & LOGIN ROUTES (OLX Model)
+# ===========================
+
+NEW_AUTH_ROUTES = '''
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """
+    Unified registration for all users.
+    All users get role='user' and can both buy and sell.
+    """
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        phone = request.form.get("phone", "").strip()
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+
+        # Validation
+        if not all([full_name, email, phone, password, password_confirm]):
+            flash("❌ All fields are required", "error")
+            return redirect(url_for("register"))
+
+        if len(full_name) < 3:
+            flash("❌ Full name must be at least 3 characters", "error")
+            return redirect(url_for("register"))
+
+        if len(password) < 6:
+            flash("❌ Password must be at least 6 characters", "error")
+            return redirect(url_for("register"))
+
+        if password != password_confirm:
+            flash("❌ Passwords do not match", "error")
+            return redirect(url_for("register"))
+
+        # Email format validation
+        if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+            flash("❌ Invalid email address", "error")
+            return redirect(url_for("register"))
+
+        # Phone validation (basic)
+        if not re.match(r'^[0-9]{10,15}$', phone.replace(' ', '').replace('-', '')):
+            flash("❌ Invalid phone number (10-15 digits required)", "error")
+            return redirect(url_for("register"))
+
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Check email uniqueness
+            cursor.execute("SELECT id FROM users WHERE email=%s", (email,))
+            if cursor.fetchone():
+                flash("❌ Email already registered", "error")
+                cursor.close()
+                conn.close()
+                return redirect(url_for("register"))
+
+            # Check phone uniqueness (optional)
+            cursor.execute("SELECT id FROM users WHERE phone=%s", (phone,))
+            if cursor.fetchone():
+                flash("❌ Phone number already registered", "error")
+                cursor.close()
+                conn.close()
+                return redirect(url_for("register"))
+
+            hashed_password = hash_password(password)
+
+            # All users get role='user' - no seller/buyer distinction
+            cursor.execute("""
+                INSERT INTO users (
+                    username, email, password, phone, full_name, 
+                    role, total_listings, completed_sales, 
+                    seller_rating, total_rating_count, created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                full_name,  # username is now full_name
+                email, 
+                hashed_password, 
+                phone, 
+                full_name,
+                'user',  # ALL users get 'user' role
+                0,  # total_listings
+                0,  # completed_sales
+                0.0,  # seller_rating
+                0,  # total_rating_count
+                datetime.now()
+            ))
+
+            conn.commit()
+            user_id = cursor.lastrowid
+            cursor.close()
+            conn.close()
+
+            # Auto-login user after registration
+            session["user_id"] = user_id
+            session["role"] = "user"
+            session["username"] = full_name
+            session["email"] = email
+
+            flash("✅ Registration successful! Welcome to ReGear. You can now post products or browse items.", "success")
+            return redirect(url_for("dashboard"))
+
+        except MySQLError as e:
+            app.logger.error(f"Registration error: {e}")
+            flash("❌ Database error during registration. Please try again.", "error")
+            return redirect(url_for("register"))
+        except Exception as e:
+            app.logger.error(f"Unexpected error during registration: {e}")
+            flash(f"❌ Error: {str(e)}", "error")
+            return redirect(url_for("register"))
+
+    return render_template("register_unified.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """
+    Login for all users (buyers and sellers).
+    """
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        if not email or not password:
+            flash("❌ Email and password required", "error")
+            return redirect(url_for("login"))
+
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute(
+                """SELECT id, password, role, username, email, full_name 
+                   FROM users WHERE email=%s""",
+                (email,)
+            )
+            user = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if not user:
+                flash("❌ Email not found", "error")
+                return redirect(url_for("login"))
+
+            if user['role'] == 'blocked':
+                flash("❌ Your account has been blocked. Please contact support.", "error")
+                return redirect(url_for("login"))
+
+            if verify_password(user['password'], password):
+                # Update session
+                session["user_id"] = user['id']
+                session["role"] = user['role']
+                session["username"] = user['username']
+                session["email"] = user['email']
+                session["full_name"] = user['full_name']
+
+                flash(f"✅ Welcome back, {user['full_name']}!", "success")
+
+                # Redirect to 'next' if provided, otherwise home
+                next_url = request.form.get('next') or request.args.get('next')
+                if next_url and next_url.startswith('/'):
+                    return redirect(next_url)
+
+                # Role-based redirect
+                if user['role'] == 'admin':
+                    return redirect(url_for("admin.dashboard"))
+                else:
+                    return redirect(url_for("home"))
+            else:
+                flash("❌ Incorrect password", "error")
+                return redirect(url_for("login"))
+
+        except MySQLError as e:
+            app.logger.error(f"Login DB error: {e}")
+            flash("❌ Database error. Please try again.", "error")
+            return redirect(url_for("login"))
+        except Exception as e:
+            app.logger.error(f"Login error: {e}")
+            flash(f"❌ Error: {str(e)}", "error")
+            return redirect(url_for("login"))
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    """Logout user"""
+    username = session.get("username", "User")
+    session.clear()
+    flash(f"✅ You have been logged out. See you soon!", "success")
+    return redirect(url_for("home"))
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    """
+    Unified dashboard for all users (buyers/sellers).
+    Shows user stats and quick actions.
+    """
+    user_id = session.get("user_id")
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Get user info
+        cursor.execute(
+            """SELECT username, email, phone, full_name, total_listings, 
+                      completed_sales, seller_rating, total_rating_count
+               FROM users WHERE id=%s""",
+            (user_id,)
+        )
+        user = cursor.fetchone()
+
+        # Get active listings count
+        cursor.execute(
+            """SELECT COUNT(*) as count FROM listings 
+               WHERE user_id=%s AND status='active'""",
+            (user_id,)
+        )
+        active_listings = cursor.fetchone()['count']
+
+        # Get expired listings count
+        cursor.execute(
+            """SELECT COUNT(*) as count FROM listings 
+               WHERE user_id=%s AND status='expired' AND is_sold=FALSE""",
+            (user_id,)
+        )
+        expired_listings = cursor.fetchone()['count']
+
+        # Get recent listings
+        cursor.execute(
+            """SELECT id, title, price, status, created_at, is_sold, view_count
+               FROM listings WHERE user_id=%s
+               ORDER BY created_at DESC LIMIT 5""",
+            (user_id,)
+        )
+        recent_listings = cursor.fetchall()
+
+        # Get unread chats count
+        cursor.execute(
+            """SELECT COUNT(*) as count FROM chats 
+               WHERE (buyer_id=%s OR seller_id=%s)""",
+            (user_id, user_id)
+        )
+        chats_count = cursor.fetchone()['count']
+
+        cursor.close()
+        conn.close()
+
+        return render_template("dashboard_unified.html",
+            user=user,
+            active_listings=active_listings,
+            expired_listings=expired_listings,
+            recent_listings=recent_listings,
+            chats_count=chats_count
+        )
+
+    except MySQLError as e:
+        app.logger.error(f"Dashboard error: {e}")
+        flash("❌ Error loading dashboard", "error")
+        return redirect(url_for("home"))
+    except Exception as e:
+        app.logger.error(f"Dashboard error: {e}")
+        flash(f"❌ Error: {str(e)}", "error")
+        return redirect(url_for("home"))
+
+
+# Add regex import at top of file if not already present
+import re
+'''
+
+print(NEW_AUTH_ROUTES)

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment - Boost Listing | ReGear</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .payment-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .payment-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .payment-header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .payment-header p {
+            margin: 0;
+            opacity: 0.95;
+        }
+
+        .payment-body {
+            padding: 40px;
+        }
+
+        .package-summary {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+        }
+
+        .summary-row.total {
+            border-top: 2px solid #ddd;
+            padding-top: 12px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .payment-methods {
+            margin-bottom: 30px;
+        }
+
+        .payment-methods h5 {
+            margin-bottom: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .payment-method {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .payment-method:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .payment-method input[type="radio"] {
+            margin-right: 15px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .payment-method label {
+            margin: 0;
+            flex: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .payment-method i {
+            font-size: 1.2rem;
+            color: #667eea;
+        }
+
+        .btn-pay {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-pay:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-cancel {
+            width: 100%;
+            padding: 12px;
+            background: #e5e5e5;
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        .btn-cancel:hover {
+            background: #d0d0d0;
+        }
+
+        .security-info {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #2e7d32;
+        }
+
+        .security-info i {
+            margin-right: 8px;
+            color: #4caf50;
+        }
+
+        @media (max-width: 576px) {
+            .payment-body {
+                padding: 20px;
+            }
+
+            .payment-header h1 {
+                font-size: 1.4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Back Button -->
+    <div style="position: fixed; top: 20px; left: 20px; z-index: 1000;">
+        <a href="{{ url_for('my_listings') }}" class="btn btn-light btn-sm" style="box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center;">
+            <i class="fas fa-arrow-left" style="color: #667eea; font-size: 18px;"></i>
+        </a>
+    </div>
+
+    <div class="payment-container">
+        <div class="payment-header">
+            <h1><i class="fas fa-credit-card"></i> Complete Payment</h1>
+            <p>Secure payment for {{ package['name'] }}</p>
+        </div>
+
+        <div class="payment-body">
+            <!-- Package Summary -->
+            <div class="package-summary">
+                <div class="summary-row">
+                    <span><strong>{{ package['name'] }}</strong></span>
+                    <span>₹{{ "%.2f"|format(package['price']) }}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Duration:</span>
+                    <span>{{ package['days'] }} days</span>
+                </div>
+                <div class="summary-row">
+                    <span>{{ package['description'] }}</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Total Amount:</span>
+                    <span>₹{{ "%.2f"|format(package['price']) }}</span>
+                </div>
+            </div>
+
+            <!-- Payment Form -->
+            <form method="POST">
+                <!-- Payment Methods -->
+                <div class="payment-methods">
+                    <h5><i class="fas fa-wallet"></i> Select Payment Method</h5>
+                    
+                    <div class="payment-method">
+                        <input type="radio" id="razorpay" name="payment_method" value="razorpay" checked>
+                        <label for="razorpay">
+                            <i class="fas fa-mobile-alt"></i>
+                            <span>Razorpay (UPI/Card/Wallet)</span>
+                        </label>
+                    </div>
+
+                    <div class="payment-method">
+                        <input type="radio" id="card" name="payment_method" value="card">
+                        <label for="card">
+                            <i class="fas fa-credit-card"></i>
+                            <span>Debit/Credit Card</span>
+                        </label>
+                    </div>
+
+                    <div class="payment-method">
+                        <input type="radio" id="upi" name="payment_method" value="upi">
+                        <label for="upi">
+                            <i class="fas fa-qrcode"></i>
+                            <span>UPI Transfer</span>
+                        </label>
+                    </div>
+
+                    <div class="payment-method">
+                        <input type="radio" id="netbanking" name="payment_method" value="netbanking">
+                        <label for="netbanking">
+                            <i class="fas fa-university"></i>
+                            <span>Net Banking</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Payment Button -->
+                <button type="submit" class="btn-pay">
+                    <i class="fas fa-lock"></i> Pay ₹{{ "%.2f"|format(package['price']) }}
+                </button>
+
+                <!-- Cancel Button -->
+                <a href="{{ url_for('boost_listing', listing_id=listing_id) }}" class="btn-cancel" style="text-decoration: none; display: inline-block;">
+                    Cancel
+                </a>
+
+                <!-- Security Info -->
+                <div class="security-info">
+                    <i class="fas fa-shield-alt"></i>
+                    <strong>Secure Payment:</strong> Your payment information is encrypted and secure. We never store your card details.
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Mark selected payment method
+        document.querySelectorAll('.payment-method').forEach(el => {
+            el.addEventListener('click', function() {
+                document.querySelectorAll('.payment-method').forEach(m => m.style.borderColor = '#ddd');
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                this.style.borderColor = '#667eea';
+                this.style.background = 'rgba(102, 126, 234, 0.05)';
+            });
+        });
+
+        // Mark first as selected on load
+        document.querySelector('.payment-method').click();
+    </script>
+</body>
+</html>

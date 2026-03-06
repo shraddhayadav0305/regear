@@ -1,0 +1,300 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Seller Subscriptions - ReGear Admin{% endblock %}
+
+{% block content %}
+<div class="admin-header mb-4">
+    <div>
+        <h1 class="mb-2">Seller Subscriptions</h1>
+        <p class="text-muted">Manage active and expired seller subscriptions</p>
+    </div>
+</div>
+
+<!-- FILTERS -->
+<div class="card mb-4" style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <a href="{{ url_for('admin.manage_subscriptions', status='all') }}" class="btn {% if status_filter == 'all' or not status_filter %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm">
+                All Subscriptions
+            </a>
+            <a href="{{ url_for('admin.manage_subscriptions', status='active') }}" class="btn {% if status_filter == 'active' %}btn-success{% else %}btn-outline-success{% endif %} btn-sm ms-2">
+                Active
+            </a>
+            <a href="{{ url_for('admin.manage_subscriptions', status='expiring') }}" class="btn {% if status_filter == 'expiring' %}btn-warning{% else %}btn-outline-warning{% endif %} btn-sm ms-2">
+                Expiring Soon
+            </a>
+            <a href="{{ url_for('admin.manage_subscriptions', status='expired') }}" class="btn {% if status_filter == 'expired' %}btn-danger{% else %}btn-outline-danger{% endif %} btn-sm ms-2">
+                Expired
+            </a>
+        </div>
+        <div class="col-md-6 text-end">
+            <small class="text-muted">Total: {{ total }} subscriptions</small>
+        </div>
+    </div>
+</div>
+
+<!-- TABLE -->
+<div class="table-responsive card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <table class="table table-hover mb-0">
+        <thead class="table-light">
+            <tr>
+                <th><i class="fas fa-user"></i> Seller Name</th>
+                <th><i class="fas fa-crown"></i> Package</th>
+                <th><i class="fas fa-calendar-plus"></i> Start Date</th>
+                <th><i class="fas fa-calendar-times"></i> Expiry Date</th>
+                <th><i class="fas fa-info-circle"></i> Status</th>
+                <th><i class="fas fa-cog"></i> Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sub in subscriptions %}
+            <tr>
+                <td>
+                    <strong>{{ sub.username }}</strong><br>
+                    <small class="text-muted">{{ sub.email }}</small>
+                </td>
+                <td>
+                    <span class="badge bg-primary">{{ sub.seller_package|default('BASIC')|upper }}</span>
+                </td>
+                <td>
+                    {% if sub.subscription_start %}
+                        {{ sub.subscription_start.strftime('%d %b %Y') }}
+                    {% else %}
+                        <span class="text-muted">Not set</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if sub.subscription_end %}
+                        {{ sub.subscription_end.strftime('%d %b %Y') }}
+                    {% else %}
+                        <span class="text-muted">Not set</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if sub.seller_active and sub.subscription_end and sub.subscription_end > now %}
+                        <span class="badge bg-success">Active</span>
+                    {% elif sub.subscription_end and sub.subscription_end <= now %}
+                        <span class="badge bg-danger">Expired</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('admin.view_user', user_id=sub.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        {% if sub.seller_active %}
+                        <button class="btn btn-sm btn-outline-warning" onclick="extendSubscription({{ sub.id }})">
+                            <i class="fas fa-clock"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- PAGINATION -->
+{% if total_pages > 1 %}
+<div class="d-flex justify-content-center mt-4">
+    <nav>
+        <ul class="pagination">
+            {% if current_page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=current_page-1, status=status_filter) }}">Previous</a>
+            </li>
+            {% endif %}
+
+            {% for page_num in range(max(1, current_page-2), min(total_pages+1, current_page+3)) %}
+            <li class="page-item {% if page_num == current_page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=page_num, status=status_filter) }}">{{ page_num }}</a>
+            </li>
+            {% endfor %}
+
+            {% if current_page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=current_page+1, status=status_filter) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endif %}
+
+<script>
+function extendSubscription(userId) {
+    if (confirm('Extend this seller\'s subscription by 30 days?')) {
+        fetch(`/admin/user/${userId}/extend-subscription`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error extending subscription: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+        });
+    }
+}
+</script>
+
+<style>
+.admin-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.admin-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.admin-header p {
+    margin: 0;
+    opacity: 0.9;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #374151;
+    padding: 15px;
+}
+
+.table td {
+    padding: 15px;
+    vertical-align: middle;
+}
+
+.btn-group .btn {
+    margin-right: 5px;
+}
+
+.badge {
+    font-size: 0.75rem;
+    padding: 6px 10px;
+}
+</style>
+
+{% endblock %}
+            {% if subscriptions %}
+                {% for user in subscriptions %}
+                <tr>
+                    <td>
+                        <strong>{{ user.username }}</strong>
+                        <br>
+                        <small class="text-muted" style="font-size: 11px;">{{ user.email }}</small>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge bg-info">{{ user.boost_count }}</span>
+                    </td>
+                    <td style="text-align: right;">
+                        <strong style="color: #f59e0b; font-size: 1.1rem;">₹{{ "{:,.0f}".format(user.total_spent|default(0)) }}</strong>
+                    </td>
+                    <td>
+                        {% if user.last_boost_date %}
+                            <small>{{ user.last_boost_date.strftime('%d %b %Y') }}</small>
+                        {% else %}
+                            <small class="text-muted">Never</small>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge bg-info">{{ user.active_listings }}</span>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="badge bg-success">{{ user.sold_count }}</span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('admin.admin_users') }}" class="btn btn-sm btn-outline-primary">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-5">
+                        <p class="text-muted mb-0"><i class="fas fa-inbox"></i> No boost activity found</p>
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- PAGINATION -->
+{% if total_pages > 1 %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% for page_num in range(1, total_pages + 1) %}
+            {% if page_num == current_page %}
+                <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+            {% else %}
+                <li class="page-item"><a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=page_num, status=status_filter) }}">{{ page_num }}</a></li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+
+<style>
+    .admin-header {
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .admin-header h1 {
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    @media (max-width: 768px) {
+        .table {
+            font-size: 0.85rem;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+    }
+</style>
+
+{% endblock %}
+
+<style>
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    table th {
+        background: #f3f4f6;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 2px solid #e5e7eb;
+        padding: 16px;
+    }
+
+    table td {
+        padding: 16px;
+        color: #6b7280;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    table tbody tr:hover {
+        background: #f9fafb;
+    }
+</style>
+{% endblock %}

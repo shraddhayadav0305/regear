@@ -1,0 +1,280 @@
+"""
+New Routes for OLX Boost and Expiration System
+- Boost product purchase
+- View boost options for expired listings
+- Mark listing as sold
+- Check listing expiration
+"""
+
+NEW_BOOST_ROUTES = '''
+@app.route("/api/check-expiration", methods=["POST"])
+@login_required
+def check_expiration():
+    """
+    Check if a listing has expired and suggest boosts.
+    Called via AJAX when user views an expired listing.
+    """
+    try:
+        data = request.get_json()
+        listing_id = data.get('listing_id')
+        
+        if not listing_id:
+            return jsonify({"success": False, "message": "Invalid listing ID"}), 400
+        
+        user_id = session.get('user_id')
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get listing details
+        cursor.execute(
+            """SELECT id, user_id, status, is_sold, expires_date, listing_type
+               FROM listings WHERE id=%s LIMIT 1""",
+            (listing_id,)
+        )
+        listing = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not listing:
+            return jsonify({"success": False, "message": "Listing not found"}), 404
+        
+        if listing['user_id'] != user_id:
+            return jsonify({"success": False, "message": "Not authorized"}), 403
+        
+        if listing['is_sold']:
+            return jsonify({
+                "success": True,
+                "status": "sold",
+                "message": "Congratulations! Your item has been sold!"
+            })
+        
+        if not listing['expires_date']:
+            return jsonify({"success": True, "status": "no_expiry"})
+        
+        if datetime.now() > listing['expires_date']:
+            return jsonify({
+                "success": True,
+                "status": "expired",
+                "message": f"Your free trial period has ended. Boost it to get more visibility!",
+                "boost_options": [
+                    {"name": "Basic Boost", "days": 7, "price": 5.00, "key": "basic"},
+                    {"name": "featured", "days": 14, "price": 10.00, "key": "featured"},
+                    {"name": "Premium", "days": 30, "price": 20.00, "key": "premium"},
+                    {"name": "Homepage Banner", "days": 30, "price": 50.00, "key": "banner"}
+                ]
+            })
+        else:
+            days_left = (listing['expires_date'] - datetime.now()).days
+            return jsonify({
+                "success": True,
+                "status": "active",
+                "days_left": days_left,
+                "message": f"Your listing is active and will expire in {days_left} days."
+            })
+        
+    except Exception as e:
+        app.logger.error(f"Error in check_expiration: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/boost/<int:listing_id>", methods=["GET", "POST"])
+@login_required
+def boost_listing(listing_id):
+    """
+    Boost/Feature a listing after free trial expires.
+    Shows available boost packages and handles purchase.
+    """
+    user_id = session.get('user_id')
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get listing details
+        cursor.execute(
+            """SELECT id, user_id, title, price, expires_date, is_sold, status
+               FROM listings WHERE id=%s LIMIT 1""",
+            (listing_id,)
+        )
+        listing = cursor.fetchone()
+        
+        if not listing:
+            flash("❌ Listing not found", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("my_listings"))
+        
+        if listing['user_id'] != user_id:
+            flash("❌ You can only boost your own listings", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("my_listings"))
+        
+        if listing['is_sold']:
+            flash("✅ This item has already been sold!", "success")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("my_listings"))
+        
+        # Boost packages
+        boost_packages = {
+            "basic": {"name": "Basic Boost", "days": 7, "price": 5.00, "description": "Get 7 more days of visibility"},
+            "featured": {"name": "Featured Listing", "days": 14, "price": 10.00, "description": "14 days + Featured badge"},
+            "premium": {"name": "Premium Visibility", "days": 30, "price": 20.00, "description": "30 days + Premium badge"},
+            "banner": {"name": "Homepage Banner", "days": 30, "price": 50.00, "description": "30 days + Homepage visibility"}
+        }
+        
+        if request.method == "POST":
+            package_key = request.form.get("package")
+            
+            if package_key not in boost_packages:
+                flash("❌ Invalid package selected", "error")
+                cursor.close()
+                conn.close()
+                return redirect(url_for("boost_listing", listing_id=listing_id))
+            
+            package = boost_packages[package_key]
+            
+            # Create boost record
+            purchased_date = datetime.now()
+            expires_date_new = purchased_date + timedelta(days=package['days'])
+            
+            cursor.execute("""
+                INSERT INTO product_boosts (
+                    listing_id, user_id, boost_type, price, days_active, 
+                    purchased_date, expires_date, is_active
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                listing_id, user_id, package_key, package['price'], 
+                package['days'], purchased_date, expires_date_new, True
+            ))
+            
+            # Update listing
+            cursor.execute("""
+                UPDATE listings 
+                SET status=%s, boost_type=%s, boost_expires_date=%s, listing_type=%s
+                WHERE id=%s
+            """, (
+                'boosted' if package_key == 'basic' else 'featured',
+                package_key,
+                expires_date_new,
+                f'boosted_{package_key}',
+                listing_id
+            ))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            flash(f"✅ Your listing has been boosted with {package['name']} for {package['days']} days! Expires: {expires_date_new.strftime('%B %d, %Y')}", "success")
+            return redirect(url_for("my_listings"))
+        
+        cursor.close()
+        conn.close()
+        
+        return render_template("boost_listing.html",
+            listing=listing,
+            boost_packages=boost_packages
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error in boost_listing: {e}")
+        flash(f"❌ Error: {str(e)}", "error")
+        return redirect(url_for("my_listings"))
+
+
+@app.route("/listing/<int:listing_id>/mark-sold", methods=["POST"])
+@login_required
+def mark_sold(listing_id):
+    """
+    Mark a listing as sold by the seller.
+    """
+    user_id = session.get('user_id')
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify ownership
+        cursor.execute(
+            "SELECT user_id FROM listings WHERE id=%s LIMIT 1",
+            (listing_id,)
+        )
+        listing = cursor.fetchone()
+        
+        if not listing:
+            return jsonify({"success": False, "message": "Listing not found"}), 404
+        
+        if listing['user_id'] != user_id:
+            return jsonify({"success": False, "message": "Not authorized"}), 403
+        
+        # Mark as sold
+        cursor.execute("""
+            UPDATE listings 
+            SET is_sold=TRUE, sold_date=%s, status=%s
+            WHERE id=%s
+        """, (datetime.now(), 'sold', listing_id))
+        
+        # Update user's completed_sales count
+        cursor.execute(
+            "UPDATE users SET completed_sales=completed_sales+1 WHERE id=%s",
+            (user_id,)
+        )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({"success": True, "message": "Listing marked as sold!"})
+        
+    except Exception as e:
+        app.logger.error(f"Error marking sold: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/expire-listings", methods=["POST"])
+def expire_listings():
+    """
+    Background job to automatically expire listings after 5 days.
+    Can be called by a cron job or scheduled task.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Find listings that have expired (and not sold)
+        cursor.execute("""
+            SELECT id FROM listings 
+            WHERE status='active' 
+            AND is_sold=FALSE 
+            AND expires_date IS NOT NULL
+            AND expires_date < NOW()
+        """)
+        expired_listings = cursor.fetchall()
+        
+        expired_count = 0
+        for listing in expired_listings:
+            cursor.execute(
+                "UPDATE listings SET status=%s WHERE id=%s",
+                ('expired', listing['id'])
+            )
+            expired_count += 1
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        app.logger.info(f"Expired {expired_count} listings")
+        return jsonify({
+            "success": True,
+            "message": f"Expired {expired_count} listings"
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error expiring listings: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+'''
+
+print(NEW_BOOST_ROUTES)

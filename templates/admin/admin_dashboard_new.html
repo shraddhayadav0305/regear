@@ -1,0 +1,389 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Dashboard - ReGear Admin{% endblock %}
+
+{% block content %}
+<div class="admin-header mb-4">
+    <div>
+        <h1 class="mb-2">Dashboard</h1>
+        <p class="text-muted">Welcome back! Here's your platform overview.</p>
+    </div>
+    <div>
+        <small class="text-muted">Last updated: {{ now }}</small>
+    </div>
+</div>
+
+<!-- USER METRICS ROW -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card users">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Total Users</p>
+                    <h3 class="stat-value">{{ stats.total_users }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-users stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card users">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Active Users</p>
+                    <h3 class="stat-value">{{ stats.active_users }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-user-check stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card danger">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Blocked Users</p>
+                    <h3 class="stat-value">{{ stats.blocked_users }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-ban stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card alert">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Pending Complaints</p>
+                    <h3 class="stat-value">{{ stats.pending_complaints }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-exclamation-circle stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LISTING METRICS ROW -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Total Listings</p>
+                    <h3 class="stat-value">{{ stats.total_listings }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-list stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card alert">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Pending Approval</p>
+                    <h3 class="stat-value">{{ stats.pending_listings }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-clock stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Approved Listings</p>
+                    <h3 class="stat-value">{{ stats.approved_listings }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-check-circle stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Sold Products</p>
+                    <h3 class="stat-value">{{ stats.sold_listings }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-shopping-bag stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- REVENUE METRICS ROW -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card revenue">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Total Revenue</p>
+                    <h3 class="stat-value">₹{{ "{:,.0f}".format(stats.total_revenue) }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-chart-line stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card revenue">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Monthly Revenue</p>
+                    <h3 class="stat-value">₹{{ "{:,.0f}".format(stats.monthly_revenue) }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-calendar-alt stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card revenue">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Quarterly Revenue</p>
+                    <h3 class="stat-value">₹{{ "{:,.0f}".format(stats.quarterly_revenue) }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-chart-bar stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card stat-card revenue">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Annual Revenue</p>
+                    <h3 class="stat-value">₹{{ "{:,.0f}".format(stats.annual_revenue) }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-trophy stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SUBSCRIPTION METRICS ROW -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card stat-card">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Active Subscriptions</p>
+                    <h3 class="stat-value">{{ stats.active_subscriptions }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-check stat-icon" style="color: #10b981;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card stat-card alert">
+            <div class="row g-0">
+                <div class="col-9">
+                    <p class="stat-label">Expiring Soon (7 days)</p>
+                    <h3 class="stat-value">{{ stats.expiring_subscriptions }}</h3>
+                </div>
+                <div class="col-3 text-end">
+                    <i class="fas fa-exclamation-triangle stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CHARTS SECTION -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card chart-container">
+            <h6 class="chart-title"><i class="fas fa-chart-bar"></i> Monthly Revenue Trend</h6>
+            <canvas id="revenueChart"></canvas>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card chart-container">
+            <h6 class="chart-title"><i class="fas fa-pie-chart"></i> Top Categories</h6>
+            <canvas id="categoryChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card chart-container">
+            <h6 class="chart-title"><i class="fas fa-chart-line"></i> Recent Listings (7 days)</h6>
+            <canvas id="listingsChart"></canvas>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card chart-container">
+            <h6 class="chart-title"><i class="fas fa-chart-line"></i> Recent Users (7 days)</h6>
+            <canvas id="usersChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<style>
+    .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        border-left: 4px solid #e5e7eb;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+
+    .stat-card.revenue { border-left-color: #10b981; }
+    .stat-card.users { border-left-color: #3b82f6; }
+    .stat-card.alert { border-left-color: #f59e0b; }
+    .stat-card.danger { border-left-color: #ef4444; }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 10px 0;
+        color: #1f2937;
+    }
+
+    .stat-label {
+        color: #6b7280;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-icon {
+        font-size: 2rem;
+        opacity: 0.15;
+    }
+
+    .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .chart-title {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 20px;
+        font-size: 1rem;
+    }
+</style>
+
+<script>
+    // Revenue Chart
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+    const revenueChart = new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+            labels: {{ stats.monthly_revenue_chart|map(attribute='month')|list|tojson }},
+            datasets: [{
+                label: 'Revenue (₹)',
+                data: {{ stats.monthly_revenue_chart|map(attribute='revenue')|list|tojson }},
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+
+    // Category Pie Chart
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    const categoryChart = new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ stats.category_performance|map(attribute='category')|list|tojson }},
+            datasets: [{
+                data: {{ stats.category_performance|map(attribute='count')|list|tojson }},
+                backgroundColor: ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe', '#667eea', '#764ba2', '#f093fb']
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // Listings Chart
+    const listingsCtx = document.getElementById('listingsChart').getContext('2d');
+    const listingsChart = new Chart(listingsCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ stats.recent_listings|map(attribute='date')|list|tojson }},
+            datasets: [{
+                label: 'Listings',
+                data: {{ stats.recent_listings|map(attribute='count')|list|tojson }},
+                backgroundColor: '#3b82f6'
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    // Users Chart
+    const usersCtx = document.getElementById('usersChart').getContext('2d');
+    const usersChart = new Chart(usersCtx, {
+        type: 'line',
+        data: {
+            labels: {{ stats.recent_users|map(attribute='date')|list|tojson }},
+            datasets: [{
+                label: 'New Users',
+                data: {{ stats.recent_users|map(attribute='count')|list|tojson }},
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+</script>
+{% endblock %}

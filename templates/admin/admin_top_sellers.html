@@ -1,0 +1,286 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Top Sellers - ReGear Admin{% endblock %}
+
+{% block content %}
+<div class="admin-header mb-4">
+    <div>
+        <h1 class="mb-2">Top Sellers Ranking</h1>
+        <p class="text-muted">Leaderboard of best performing sellers on ReGear</p>
+    </div>
+</div>
+
+<!-- FILTERS & TIME PERIOD -->
+<div class="card mb-4" style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label"><i class="fas fa-calendar"></i> Time Period</label>
+            <select class="form-select" id="periodFilter" onchange="window.location.href = `{{ url_for('admin.top_sellers') }}?period=${this.value}`">
+                <option value="this_month" {% if period == 'this_month' %}selected{% endif %}>This Month</option>
+                <option value="last_month" {% if period == 'last_month' %}selected{% endif %}>Last Month</option>
+                <option value="this_quarter" {% if period == 'this_quarter' %}selected{% endif %}>This Quarter</option>
+                <option value="this_year" {% if period == 'this_year' %}selected{% endif %}>This Year</option>
+                <option value="all_time" {% if period == 'all_time' %}selected{% endif %}>All Time</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label"><i class="fas fa-sort"></i> Sort By</label>
+            <select class="form-select" id="sortFilter" onchange="window.location.href = `{{ url_for('admin.top_sellers') }}?sort=${this.value}`">
+                <option value="revenue" {% if sort_by == 'revenue' %}selected{% endif %}>Revenue</option>
+                <option value="listings" {% if sort_by == 'listings' %}selected{% endif %}>Total Listings</option>
+                <option value="sold" {% if sort_by == 'sold' %}selected{% endif %}>Sold Items</option>
+                <option value="rating" {% if sort_by == 'rating' %}selected{% endif %}>Rating</option>
+            </select>
+        </div>
+        <div class="col-md-4 text-end">
+            <small class="text-muted"><i class="fas fa-list"></i> Total Sellers: {{ sellers|length }}</small>
+        </div>
+    </div>
+</div>
+
+<!-- TOP 3 PODIUM -->
+<div class="row mb-4">
+    {% if sellers|length >= 2 %}
+    <!-- 2nd Place -->
+    <div class="col-md-4 mb-3 order-md-1">
+        <div class="card text-center" style="border-radius: 12px; border: 2px solid #c0a080; box-shadow: 0 8px 16px rgba(192, 160, 128, 0.2); position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #c0a080, #d4af37);"></div>
+            <div class="card-body pt-4">
+                <div style="font-size: 48px; font-weight: bold; color: #c0a080; margin-bottom: 10px;">🥈</div>
+                <h6 class="mb-1">2nd Place</h6>
+                <h4 class="mb-3">{{ sellers[1].username }}</h4>
+                <div class="d-flex justify-content-center gap-3 mb-3">
+                    <div>
+                        <h5 class="mb-1">₹{{ "{:,.0f}".format(sellers[1].total_revenue) }}</h5>
+                        <small class="text-muted">Revenue</small>
+                    </div>
+                </div>
+                <hr style="margin: 12px 0;">
+                <small class="text-muted">
+                    {{ sellers[1].total_listings }} listings • {{ sellers[1].sold_products }} sold
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1st Place -->
+    {% if sellers|length >= 1 %}
+    <div class="col-md-4 mb-3 order-md-2">
+        <div class="card text-center" style="border-radius: 12px; border: 2px solid #ffd700; box-shadow: 0 12px 24px rgba(255, 215, 0, 0.3); position: relative; overflow: hidden; transform: scale(1.05);">
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #ffd700, #ffed4e);"></div>
+            <div class="card-body pt-4">
+                <div style="font-size: 56px; font-weight: bold; color: #ffd700; margin-bottom: 10px; animation: pulse 2s infinite;">🥇</div>
+                <h6 class="mb-1">1st Place</h6>
+                <h4 class="mb-3"><strong>{{ sellers[0].username }}</strong></h4>
+                <div class="d-flex justify-content-center gap-3 mb-3">
+                    <div>
+                        <h5 class="mb-1" style="color: #10b981;">₹{{ "{:,.0f}".format(sellers[0].total_revenue) }}</h5>
+                        <small class="text-muted">Revenue</small>
+                    </div>
+                </div>
+                <hr style="margin: 12px 0;">
+                <small class="text-muted">
+                    {{ sellers[0].total_listings }} listings • {{ sellers[0].sold_products }} sold
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 3rd Place -->
+    {% if sellers|length >= 3 %}
+    <div class="col-md-4 mb-3 order-md-3">
+        <div class="card text-center" style="border-radius: 12px; border: 2px solid #cd7f32; box-shadow: 0 8px 16px rgba(205, 127, 50, 0.2); position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #cd7f32, #d4a574);"></div>
+            <div class="card-body pt-4">
+                <div style="font-size: 48px; font-weight: bold; color: #cd7f32; margin-bottom: 10px;">🥉</div>
+                <h6 class="mb-1">3rd Place</h6>
+                <h4 class="mb-3">{{ sellers[2].username }}</h4>
+                <div class="d-flex justify-content-center gap-3 mb-3">
+                    <div>
+                        <h5 class="mb-1">₹{{ "{:,.0f}".format(sellers[2].total_revenue) }}</h5>
+                        <small class="text-muted">Revenue</small>
+                    </div>
+                </div>
+                <hr style="margin: 12px 0;">
+                <small class="text-muted">
+                    {{ sellers[2].total_listings }} listings • {{ sellers[2].sold_products }} sold
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+
+<!-- FULL RANKING TABLE -->
+<div class="table-responsive card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <table class="table table-hover mb-0">
+        <thead class="table-light">
+            <tr>
+                <th style="width: 80px;"><i class="fas fa-medal"></i> Rank</th>
+                <th><i class="fas fa-user"></i> Seller Name</th>
+                <th class="text-center"><i class="fas fa-phone"></i> Contact</th>
+                <th class="text-right"><i class="fas fa-box"></i> Listings</th>
+                <th class="text-right"><i class="fas fa-check"></i> Sold</th>
+                <th class="text-right"><i class="fas fa-spinner"></i> Active</th>
+                <th class="text-right"><i class="fas fa-money-bill"></i> Revenue</th>
+                <th class="text-center"><i class="fas fa-star"></i> Rating</th>
+                <th><i class="fas fa-cog"></i> Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if sellers %}
+                {% for seller in sellers %}
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; font-weight: bold;">
+                            #{{ loop.index }}
+                        </div>
+                    </td>
+                    <td>
+                        <strong>{{ seller.username }}</strong><br>
+                        <small class="text-muted">{{ seller.email|default('N/A') }}</small>
+                    </td>
+                    <td class="text-center">
+                        <small>
+                            <i class="fas fa-phone"></i> {{ seller.phone|default('N/A') }}<br>
+                            <small class="text-muted">{{ seller.email|default('N/A') }}</small>
+                        </small>
+                    </td>
+                    <td class="text-right">
+                        <span class="badge bg-info">{{ seller.total_listings }}</span>
+                    </td>
+                    <td class="text-right">
+                        <span class="badge bg-success">{{ seller.sold_products }}</span>
+                    </td>
+                    <td class="text-right">
+                        <span class="badge bg-warning text-dark">{{ seller.active_listings }}</span>
+                    </td>
+                    <td class="text-right">
+                        <strong style="font-size: 16px; color: #10b981;">₹{{ "{:,.0f}".format(seller.total_revenue) }}</strong>
+                    </td>
+                    <td class="text-center">
+                        <div style="color: #fbbf24;">
+                            {% set rating = seller.get('rating', 0) if seller is mapping else 0 %}
+                            {% for i in range(rating|int) %}
+                                <i class="fas fa-star"></i>
+                            {% endfor %}
+                        </div>
+                        <small class="text-muted">N/A</small>
+                    </td>
+                    <td>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="{{ url_for('admin.view_user', user_id=seller.id) }}"><i class="fas fa-eye"></i> View Profile</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin.manage_products', search=seller.username) }}"><i class="fas fa-list"></i> View Listings</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-warning" href="#"><i class="fas fa-gift"></i> Award Badge</a></li>
+                                <li><a class="dropdown-item text-info" href="#"><i class="fas fa-envelope"></i> Send Feature</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="9" class="text-center py-5">
+                        <p class="text-muted mb-0"><i class="fas fa-inbox"></i> No sellers found</p>
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- STATS FOOTER -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card text-center" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div class="card-body py-3">
+                <h5 class="mb-1">{{ total_sellers }}</h5>
+                <small class="text-muted">Active Sellers</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div class="card-body py-3">
+                <h5 class="mb-1">{{ total_listings }}</h5>
+                <small class="text-muted">Total Listings</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div class="card-body py-3">
+                <h5 class="mb-1">{{ total_sold }}</h5>
+                <small class="text-muted">Items Sold</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div class="card-body py-3">
+                <h5 class="mb-1">₹{{ "{:,.0f}".format(total_revenue) }}</h5>
+                <small class="text-muted">Total Revenue</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    table th {
+        background: #f3f4f6;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 2px solid #e5e7eb;
+        padding: 16px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    table td {
+        padding: 16px;
+        color: #6b7280;
+        border-bottom: 1px solid #e5e7eb;
+        vertical-align: middle;
+    }
+
+    table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    .text-right {
+        text-align: right;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+
+    .dropdown-menu {
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border: 1px solid #e5e7eb;
+    }
+
+    .dropdown-item {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+
+    .dropdown-item:hover {
+        background: #f3f4f6;
+    }
+</style>
+{% endblock %}

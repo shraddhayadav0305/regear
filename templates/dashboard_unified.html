@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ReGear</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .navbar {
+            background: white;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 15px 30px;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: #002f34;
+        }
+
+        .navbar-brand i {
+            color: #667eea;
+            margin-right: 8px;
+        }
+
+        .dashboard-container {
+            padding: 30px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .welcome-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .welcome-section h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .welcome-section p {
+            font-size: 1rem;
+            opacity: 0.95;
+            margin-bottom: 20px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-action:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            transform: translateY(-3px);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #002f34;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .listings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .listing-card {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .listing-card:hover {
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            transform: translateY(-5px);
+        }
+
+        .listing-image {
+            width: 100%;
+            height: 160px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .listing-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .listing-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background: #4caf50;
+            color: white;
+        }
+
+        .status-expired {
+            background: #ff9800;
+            color: white;
+        }
+
+        .status-sold {
+            background: #2196f3;
+            color: white;
+        }
+
+        .listing-body {
+            padding: 15px;
+        }
+
+        .listing-title {
+            font-weight: 600;
+            color: #002f34;
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .listing-price {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .listing-meta {
+            font-size: 0.85rem;
+            color: #999;
+            margin-bottom: 10px;
+        }
+
+        .listing-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-boost {
+            background: #ff9800;
+            color: white;
+        }
+
+        .btn-boost:hover {
+            background: #e68900;
+        }
+
+        .btn-view {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-view:hover {
+            background: #5568d3;
+        }
+
+        .btn-sold {
+            background: #4caf50;
+            color: white;
+        }
+
+        .btn-sold:hover {
+            background: #45a049;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .empty-state p {
+            margin-bottom: 30px;
+        }
+
+        .btn-primary-lg {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary-lg:hover {
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .user-rating {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .star {
+            color: #ffc107;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .btn-action {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('home') }}">
+                <i class="fas fa-recycle"></i> ReGear
+            </a>
+            <div class="ms-auto d-flex gap-3 align-items-center">
+                <span style="color: #666;">{{ user['username'] }}</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <!-- Welcome Section -->
+        <div class="welcome-section">
+            <h1><i class="fas fa-wave-hand"></i> Welcome, {{ user['username'] }}!</h1>
+            <p>Manage your products, chats, and seller profile all in one place</p>
+            <div class="action-buttons">
+                <a href="{{ url_for('sell') }}" class="btn-action">
+                    <i class="fas fa-plus-circle"></i> Post New Product
+                </a>
+                <a href="{{ url_for('browse') }}" class="btn-action">
+                    <i class="fas fa-search"></i> Browse Products
+                </a>
+                {% if chats_count > 0 %}
+                <a href="#" class="btn-action">
+                    <i class="fas fa-comments"></i> Messages ({{ chats_count }})
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ active_listings }}</div>
+                <div class="stat-label">Active Listings</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #ff9800;">
+                <div class="stat-value" style="color: #ff9800;">{{ expired_listings }}</div>
+                <div class="stat-label">Expired/Unsold</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #4caf50;">
+                <div class="stat-value" style="color: #4caf50;">{{ sold_listings }}</div>
+                <div class="stat-label">Sold Items</div>
+            </div>
+            <div class="stat-card" style="border-left-color: #2196f3;">
+                <div class="stat-value" style="color: #2196f3;">{{ user['completed_sales'] }}</div>
+                <div class="stat-label">Total Sales</div>
+            </div>
+        </div>
+
+        <!-- Seller Rating (if applicable) -->
+        {% if user['total_rating_count'] > 0 %}
+        <div style="background: white; padding: 15px 25px; border-radius: 10px; margin-bottom: 40px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);">
+            <strong>Seller Rating:</strong>
+            <span class="user-rating">
+                {% for i in range(5) %}
+                    {% if i < user['seller_rating'] | int %}
+                        <i class="fas fa-star star"></i>
+                    {% else %}
+                        <i class="far fa-star" style="color: #ddd;"></i>
+                    {% endif %}
+                {% endfor %}
+                {{ user['seller_rating'] }} / 5.0 ({{ user['total_rating_count'] }} reviews)
+            </span>
+        </div>
+        {% endif %}
+
+        <!-- Active Listings Section -->
+        {% if active_listings > 0 %}
+        <div>
+            <h2 class="section-title">
+                <i class="fas fa-check-circle" style="color: #4caf50;"></i> Active Listings
+            </h2>
+            <div class="listings-grid">
+                {% for listing in recent_listings %}
+                    {% if not listing['is_sold'] and listing['status'] == 'active' %}
+                    <div class="listing-card">
+                        <div class="listing-image">
+                            <i class="fas fa-image"></i>
+                            {% if listing['expires_date'] %}
+                                {% set days_left = ((listing['expires_date'] - now).total_seconds() / 86400) | int %}
+                                <span class="listing-status status-active">{{ days_left }} days</span>
+                            {% endif %}
+                        </div>
+                        <div class="listing-body">
+                            <div class="listing-title">{{ listing['title'] }}</div>
+                            <div class="listing-price">₹ {{ listing['price'] | int }}</div>
+                            <div class="listing-meta">
+                                <i class="fas fa-eye"></i> {{ listing['view_count'] }} views
+                            </div>
+                            <div class="listing-actions">
+                                <a href="{{ url_for('buy', listing_id=listing['id']) }}" class="btn-small btn-view">
+                                    <i class="fas fa-external-link-alt"></i> View
+                                </a>
+                                <button class="btn-small btn-sold" onclick="markSold({{ listing['id'] }})">
+                                    <i class="fas fa-check"></i> Sold
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Expired/Unsold Listings Section -->
+        {% if expired_listings > 0 %}
+        <div>
+            <h2 class="section-title">
+                <i class="fas fa-exclamation-circle" style="color: #ff9800;"></i> Expired Listings - Boost to Sell!
+            </h2>
+            <div class="listings-grid">
+                {% for listing in recent_listings %}
+                    {% if not listing['is_sold'] and (listing['status'] == 'expired' or (listing['expires_date'] and now > listing['expires_date'])) %}
+                    <div class="listing-card">
+                        <div class="listing-image" style="background: linear-gradient(135deg, #ff9800 0%, #e68900 100%);">
+                            <i class="fas fa-image"></i>
+                            <span class="listing-status status-expired">EXPIRED</span>
+                        </div>
+                        <div class="listing-body">
+                            <div class="listing-title">{{ listing['title'] }}</div>
+                            <div class="listing-price">₹ {{ listing['price'] | int }}</div>
+                            <div class="listing-meta">
+                                <i class="fas fa-clock"></i> Expired
+                            </div>
+                            <div class="listing-actions">
+                                <a href="{{ url_for('boost_listing', listing_id=listing['id']) }}" class="btn-small btn-boost">
+                                    <i class="fas fa-rocket"></i> Boost
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Sold Listings Section -->
+        {% if sold_listings > 0 %}
+        <div>
+            <h2 class="section-title">
+                <i class="fas fa-check-double" style="color: #2196f3;"></i> Sold Items
+            </h2>
+            <div class="listings-grid">
+                {% for listing in recent_listings %}
+                    {% if listing['is_sold'] %}
+                    <div class="listing-card" style="opacity: 0.7;">
+                        <div class="listing-image" style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);">
+                            <i class="fas fa-image"></i>
+                            <span class="listing-status status-sold">SOLD</span>
+                        </div>
+                        <div class="listing-body">
+                            <div class="listing-title">{{ listing['title'] }}</div>
+                            <div class="listing-price">₹ {{ listing['price'] | int }}</div>
+                            <div class="listing-meta">
+                                <i class="fas fa-check-circle"></i> Sold
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- No Listings -->
+        {% if total_listings == 0 %}
+        <div class="empty-state">
+            <i class="fas fa-inbox"></i>
+            <h3>No Products Yet</h3>
+            <p>Start selling by posting your first product today!</p>
+            <a href="{{ url_for('sell') }}" class="btn-primary-lg">
+                <i class="fas fa-plus-circle"></i> Post Your First Product
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function markSold(listingId) {
+            if (confirm('Mark this item as SOLD?')) {
+                fetch(`/listing/${listingId}/mark-sold`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Item marked as sold!');
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error marking item as sold');
+                });
+            }
+        }
+    </script>
+</body>
+</html>

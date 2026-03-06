@@ -1,0 +1,282 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block title %}Payments - ReGear Admin{% endblock %}
+
+{% block content %}
+<div class="admin-header mb-4">
+    <div>
+        <h1 class="mb-2">Payments Management</h1>
+        <p class="text-muted">Track and manage all seller subscription payments</p>
+    </div>
+</div>
+
+<!-- STATISTICS CARDS -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+            <div class="card-body py-4">
+                <h6 class="mb-2 text-white-50" style="font-size: 12px; text-transform: uppercase; font-weight: 600;">Total Revenue (All Time)</h6>
+                <h2 class="mb-0">₹{{ "{:,.2f}".format(stats.total_revenue|default(0)) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
+            <div class="card-body py-4">
+                <h6 class="mb-2 text-white-50" style="font-size: 12px; text-transform: uppercase; font-weight: 600;">This Month</h6>
+                <h2 class="mb-0">₹{{ "{:,.2f}".format(stats.monthly_revenue|default(0)) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+            <div class="card-body py-4">
+                <h6 class="mb-2 text-white-50" style="font-size: 12px; text-transform: uppercase; font-weight: 600;">Transactions</h6>
+                <h2 class="mb-0">{{ stats.total_transactions|default(0) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">
+            <div class="card-body py-4">
+                <h6 class="mb-2 text-white-50" style="font-size: 12px; text-transform: uppercase; font-weight: 600;">Avg. Transaction</h6>
+                <h2 class="mb-0">₹{{ "{:,.0f}".format(stats.avg_transaction|default(0)) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- FILTERS -->
+<div class="card mb-4" style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label"><i class="fas fa-calendar"></i> Filter by Month</label>
+            <select class="form-select" id="monthFilter" onchange="window.location.href = `{{ url_for('admin.manage_payments') }}?month=${this.value}`">
+                <option value="">All Months</option>
+                {% for month in available_months|reverse %}
+                    <option value="{{ month }}" {% if month == selected_month %}selected{% endif %}>{{ month }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label"><i class="fas fa-credit-card"></i> Payment Method</label>
+            <select class="form-select" id="methodFilter" onchange="window.location.href = `{{ url_for('admin.manage_payments') }}?method=${this.value}`">
+                <option value="">All Methods</option>
+                <option value="credit_card" {% if payment_method == 'credit_card' %}selected{% endif %}>Credit Card</option>
+                <option value="debit_card" {% if payment_method == 'debit_card' %}selected{% endif %}>Debit Card</option>
+                <option value="upi" {% if payment_method == 'upi' %}selected{% endif %}>UPI</option>
+                <option value="netbanking" {% if payment_method == 'netbanking' %}selected{% endif %}>Net Banking</option>
+                <option value="wallet" {% if payment_method == 'wallet' %}selected{% endif %}>Wallet</option>
+            </select>
+        </div>
+        <div class="col-md-6 text-end">
+            <small class="text-muted"><i class="fas fa-info-circle"></i> Showing {{ payments|length }} payments</small>
+        </div>
+    </div>
+</div>
+
+<!-- PAYMENTS TABLE -->
+<div class="table-responsive card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <table class="table table-hover mb-0">
+        <thead class="table-light">
+            <tr>
+                <th><i class="fas fa-id-card"></i> Transaction ID</th>
+                <th><i class="fas fa-user"></i> Seller Name</th>
+                <th><i class="fas fa-box"></i> Package</th>
+                <th><i class="fas fa-tag"></i> Amount</th>
+                <th><i class="fas fa-percent"></i> GST</th>
+                <th><i class="fas fa-sum"></i> Total</th>
+                <th><i class="fas fa-credit-card"></i> Method</th>
+                <th><i class="fas fa-calendar"></i> Date</th>
+                <th><i class="fas fa-check"></i> Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if payments %}
+                {% for payment in payments %}
+                <tr>
+                    <td><code style="font-size: 11px;">{{ payment.id }}</code></td>
+                    <td>
+                        <strong>{{ payment.username }}</strong><br>
+                        <small class="text-muted">{{ payment.email }}</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">{{ payment.plan|upper if payment.plan else 'N/A' }}</span>
+                    </td>
+                    <td>₹{{ "{:,.2f}".format(payment.amount) }}</td>
+                    <td>
+                        <span class="badge bg-light text-dark">₹{{ "{:,.2f}".format(payment.gst) }}</span>
+                    </td>
+                    <td><strong>₹{{ "{:,.2f}".format(payment.total_amount) }}</strong></td>
+                    <td>
+                        {% set method_icons = {
+                            'credit_card': 'fas fa-credit-card',
+                            'debit_card': 'fas fa-credit-card',
+                            'upi': 'fas fa-mobile-alt',
+                            'netbanking': 'fas fa-university',
+                            'wallet': 'fas fa-wallet'
+                        } %}
+                        <i class="{{ method_icons.get(payment.payment_method, 'fas fa-money-bill') }}"></i> 
+                        {{ payment.payment_method|replace('_', ' ')|title }}
+                    </td>
+                    <td>{{ payment.paid_at.strftime('%d %b %Y, %I:%M %p') if payment.paid_at else 'N/A' }}</td>
+                    <td>
+                        <span class="badge bg-success"><i class="fas fa-check-circle"></i> Completed</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="9" class="text-center py-5">
+                        <p class="text-muted mb-0"><i class="fas fa-inbox"></i> No payments found</p>
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- MONTHLY REVENUE CHART -->
+<div class="row mt-4">
+    <div class="col-lg-8">
+        <div class="card" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div class="card-body">
+                <h6 class="card-title mb-3">Monthly Revenue Trend</h6>
+                <canvas id="revenueChart" height="80"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div class="card-body">
+                <h6 class="card-title mb-3">Payment Methods</h6>
+                <canvas id="methodChart" height="110"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    table th {
+        background: #f3f4f6;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 2px solid #e5e7eb;
+        padding: 16px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    table td {
+        padding: 16px;
+        color: #6b7280;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    code {
+        background: #f3f4f6;
+        padding: 4px 8px;
+        border-radius: 4px;
+        color: #1f2937;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+    // Monthly Revenue Chart
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+    const revenueChart = new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+            labels: {{ monthly_revenue_labels|tojson }},
+            datasets: [{
+                label: 'Revenue (₹)',
+                data: {{ monthly_revenue_data|tojson }},
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderWidth: 2,
+                tension: 0.4,
+                pointBackgroundColor: '#10b981',
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { 
+                        color: '#6b7280',
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#6b7280',
+                        callback: function(value) {
+                            return '₹' + (value/1000).toFixed(0) + 'K';
+                        }
+                    },
+                    grid: { color: '#e5e7eb' }
+                },
+                x: {
+                    ticks: { color: '#6b7280' },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // Payment Methods Chart
+    const methodCtx = document.getElementById('methodChart').getContext('2d');
+    const methodChart = new Chart(methodCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ payment_method_labels|tojson }},
+            datasets: [{
+                data: {{ payment_method_counts|tojson }},
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(239, 68, 68, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(139, 92, 246, 0.8)'
+                ],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: { 
+                        color: '#6b7280',
+                        padding: 12,
+                        font: { size: 12 }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
