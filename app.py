@@ -663,6 +663,7 @@ def post_ad_form():
     return render_template("addpost.html", selected_category=selected_category, selected_subcategory=selected_subcategory)
 
 @app.route("/my-listings")
+@login_required
 def my_listings():
     """View my listings (for sellers)"""
     try:
