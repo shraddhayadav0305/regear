@@ -155,16 +155,23 @@ def register():
             except Exception:
                 pass
             hashed_password = hash_password(password)
+            # Prefer schema with full_name and role; fall back gracefully to older schemas
             try:
                 cursor.execute("""
-                    INSERT INTO users (username, email, phone, password, role, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (full_name, email, phone, hashed_password, 'buyer', datetime.now()))
+                    INSERT INTO users (username, full_name, email, phone, password, role, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (full_name, full_name, email, phone, hashed_password, 'buyer', datetime.now()))
             except Exception:
-                cursor.execute("""
-                    INSERT INTO users (username, email, phone, password, created_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (full_name, email, phone, hashed_password, datetime.now()))
+                try:
+                    cursor.execute("""
+                        INSERT INTO users (username, full_name, email, phone, password, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (full_name, full_name, email, phone, hashed_password, datetime.now()))
+                except Exception:
+                    cursor.execute("""
+                        INSERT INTO users (username, email, phone, password, created_at)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (full_name, email, phone, hashed_password, datetime.now()))
             conn.commit()
             cursor.close()
             conn.close()
