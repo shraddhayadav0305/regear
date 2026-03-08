@@ -9,39 +9,45 @@
         {% if listings %}
             {% for ad in listings %}
             <div class="col-md-6 mb-3">
-                <div class="card">
-                    <div class="row g-0">
-                        <div class="col-4">
-                            {% set img = (ad.photos.split(',')[0] if ad.photos else '') %}
-                            {% if img %}
-                                <img src="/{{ img }}" class="img-fluid rounded-start" alt="{{ ad.title }}">
-                            {% else %}
-                                <img src="/static/css/placeholder.png" class="img-fluid rounded-start" alt="No image">
-                            {% endif %}
-                        </div>
-                        <div class="col-8">
-                            <div class="card-body">
-                                <h5 class="card-title">{{ ad.title }}</h5>
-                                <p class="card-text">₹{{ ad.price }}</p>
-                                <p class="card-text"><small class="text-muted">{{ ad.category }} · {{ ad.subcategory }}</small></p>
-                                <p class="card-text">
-                                    {% if ad.approval_status == 'pending' %}
-                                        <span class="badge bg-warning text-dark">Pending</span>
-                                    {% elif ad.approval_status == 'approved' %}
-                                        <span class="badge bg-success">Approved</span>
-                                    {% elif ad.approval_status == 'rejected' %}
-                                        <span class="badge bg-danger">Rejected</span>
-                                    {% elif ad.approval_status == 'sold' %}
-                                        <span class="badge bg-secondary">Sold</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">{{ ad.approval_status }}</span>
-                                    {% endif %}
-                                </p>
-                                <a href="/listing/{{ ad.id }}" class="btn btn-sm btn-primary">View</a>
+                    <div class="card position-relative" style="cursor:pointer;">
+                        <div class="row g-0">
+                            <div class="col-4">
+                                {% set img = (ad.photos.split(',')[0] if ad.photos else '') %}
+                                {% if img %}
+                                    <img src="{{ img|imgurl }}" class="img-fluid rounded-start" alt="{{ ad.title }}">
+                                {% else %}
+                                    <img src="/static/css/placeholder.png" class="img-fluid rounded-start" alt="No image">
+                                {% endif %}
+                            </div>
+                            <div class="col-8">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-1">{{ ad.title }}</h5>
+                                    <p class="card-text">₹{{ ad.price }}</p>
+                                    <p class="card-text"><small class="text-muted">{{ ad.category }} · {{ ad.subcategory }}</small></p>
+                                    <p class="card-text">
+                                        {% if ad.approval_status == 'pending' %}
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        {% elif ad.approval_status == 'approved' %}
+                                            <span class="badge bg-success">Approved</span>
+                                        {% elif ad.approval_status == 'rejected' %}
+                                            <span class="badge bg-danger">Rejected</span>
+                                        {% elif ad.approval_status == 'sold' %}
+                                            <span class="badge bg-secondary">Sold</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ ad.approval_status }}</span>
+                                        {% endif %}
+                                    </p>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Actions">
+                                        <a href="/product/{{ ad.id }}" class="btn btn-primary">View Listing</a>
+                                        <a href="/edit-product/{{ ad.id }}" class="btn btn-outline-secondary">Edit</a>
+                                        <a href="/promotion/{{ ad.id }}" class="btn btn-outline-warning">Promote</a>
+                                        <a href="/mark-sold/{{ ad.id }}" class="btn btn-outline-success" onclick="return confirm('Mark this item as sold?');">Mark as Sold</a>
+                                        <a href="/delete-product/{{ ad.id }}" class="btn btn-outline-danger" onclick="return confirm('Delete this listing?');">Delete</a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
             </div>
             {% endfor %}
         {% else %}
@@ -51,4 +57,5 @@
         {% endif %}
     </div>
 </div>
+<!-- No additional JS required; <a> wraps the card to guarantee navigation -->
 {% endblock %}

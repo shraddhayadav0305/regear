@@ -1,0 +1,37 @@
+{% extends "dashboard.html" %}
+{% block title %}Payments & Promotions - ReGear{% endblock %}
+{% block content %}
+<div class="welcome-section">
+    <div class="section-title"><i class="fas fa-bullhorn"></i> Active Promotions</div>
+    <div class="list-group mb-4">
+        {% if promotions %}
+            {% for p in promotions %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>#{{ p.listing_id }}</strong> • {{ p.boost_type|capitalize }} • Expires {{ p.expires_date }}
+                </div>
+                <a class="btn btn-sm btn-outline-primary" href="/listing/{{ p.listing_id }}">View</a>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-muted p-3">No active promotions</div>
+        {% endif %}
+    </div>
+
+    <div class="section-title"><i class="fas fa-receipt"></i> Payment History</div>
+    <div class="list-group">
+        {% if payments %}
+            {% for t in payments %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ t.amount }}</strong> • {{ t.method or 'N/A' }} • {{ t.status or 'paid' }}
+                </div>
+                <small class="text-muted">{{ t.created_at }}</small>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-muted p-3">No payments found</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -293,9 +293,43 @@ def reset_password():
 @login_required
 def dashboard():
     try:
+        user_id = session.get('user_id')
         username = session.get('username', 'User')
         role = session.get('role', 'buyer')
-        return render_template("dashboard.html", username=username, role=role)
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        # Stats
+        try:
+            cur.execute("SELECT COUNT(*) AS c FROM listings WHERE user_id=%s AND status='active' AND approval_status='approved'", (user_id,))
+            active = cur.fetchone()['c']
+        except Exception:
+            active = 0
+        try:
+            cur.execute("SELECT COUNT(*) AS c FROM listings WHERE user_id=%s AND status='sold'", (user_id,))
+            sold = cur.fetchone()['c']
+        except Exception:
+            sold = 0
+        try:
+            cur.execute("SELECT COUNT(*) AS c FROM listings WHERE user_id=%s AND (status='expired' OR (expires_date IS NOT NULL AND expires_date<NOW() AND COALESCE(is_sold,0)=0))", (user_id,))
+            expired = cur.fetchone()['c']
+        except Exception:
+            expired = 0
+        try:
+            cur.execute("SELECT COALESCE(SUM(view_count),0) AS v FROM listings WHERE user_id=%s", (user_id,))
+            views = cur.fetchone()['v']
+        except Exception:
+            views = 0
+        # Recent listings
+        recent_listings = []
+        try:
+            cur.execute("SELECT id, title, price, status, approval_status, photos, created_at FROM listings WHERE user_id=%s ORDER BY created_at DESC LIMIT 5", (user_id,))
+            recent_listings = cur.fetchall()
+        except Exception:
+            recent_listings = []
+        cur.close()
+        conn.close()
+        stats = {"active": active, "sold": sold, "expired": expired, "views": views}
+        return render_template("dashboard.html", username=username, role=role, stats=stats, recent_listings=recent_listings)
     except Exception as e:
         flash(f"❌ Error loading dashboard: {str(e)}", "error")
         return redirect(url_for("login"))
@@ -629,28 +663,31 @@ def post_ad_form():
     return render_template("addpost.html", selected_category=selected_category, selected_subcategory=selected_subcategory)
 
 @app.route("/my-listings")
-@login_required
 def my_listings():
     """View my listings (for sellers)"""
     try:
         user_id = session.get('user_id')
+        username = session.get('username', 'User')
+        role = session.get('role', 'buyer')
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        
+
         cursor.execute("""
             SELECT id, title, category, subcategory, price, status, approval_status, created_at, photos
             FROM listings 
             WHERE user_id=%s 
             ORDER BY created_at DESC
         """, (user_id,))
-        
+
         listings = cursor.fetchall()
+        print("DEBUG: Listings fetched:", listings)  # Debug log to verify fetched data
         cursor.close()
         conn.close()
-        
-        return render_template("my_listings.html", listings=listings)
-        
+
+        return render_template("my_listings.html", listings=listings, username=username, role=role)
+
     except Exception as e:
+        print("DEBUG: Error loading listings:", str(e))  # Debug log for errors
         flash(f"❌ Error loading listings: {str(e)}", "error")
         return redirect(url_for("dashboard"))
 
@@ -712,6 +749,11 @@ def browse():
 def get_or_create_conversation(listing_id, buyer_id):
     """Return existing conversation id for buyer+listing, or create a new one.
     Also inserts a default first message and notifies the seller."""
+    # Ensure chat tables exist before any operations
+    try:
+        ensure_chat_tables()
+    except Exception:
+        pass
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -809,6 +851,10 @@ def buy_now(listing_id):
 def chat_page(conv_id):
     """Render conversation page or handle a new message post."""
     user_id = session.get('user_id')
+    try:
+        ensure_chat_tables()
+    except Exception:
+        pass
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -861,6 +907,10 @@ def chat_page(conv_id):
 @login_required
 def mark_sold(conv_id):
     user_id = session.get('user_id')
+    try:
+        ensure_chat_tables()
+    except Exception:
+        pass
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -935,19 +985,148 @@ def view_listing(listing_id):
         flash(f"❌ Error loading listing: {str(e)}", "error")
         return redirect(url_for("browse"))
 
+@app.route("/product/<int:product_id>")
+def product_page(product_id):
+    return redirect(url_for('view_listing', listing_id=product_id))
+
+@app.route("/promotion/<int:product_id>")
+@login_required
+def promotion_alias(product_id):
+    return redirect(url_for('boost_listing', listing_id=product_id))
+
+@app.route("/boost/<int:listing_id>", methods=["GET"])
+@login_required
+def boost_listing(listing_id):
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT id, user_id, title FROM listings WHERE id=%s", (listing_id,))
+        listing = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not listing:
+            flash("❌ Listing not found", "error")
+            return redirect(url_for("my_listings"))
+        if listing['user_id'] != user_id:
+            flash("❌ You can only promote your own listing", "error")
+            return redirect(url_for("my_listings"))
+        boost_packages = {
+            "basic": {"name": "Basic Boost", "days": 7, "price": 199},
+            "premium": {"name": "Premium Boost", "days": 15, "price": 349},
+            "ultimate": {"name": "Ultimate Boost", "days": 30, "price": 599}
+        }
+        return render_template("boost_listing.html", listing_id=listing_id, listing_title=listing['title'], boost_packages=boost_packages)
+    except Exception as e:
+        flash(f"❌ Error loading boost options: {e}", "error")
+        return redirect(url_for("my_listings"))
+
+@app.route("/mark-sold/<int:product_id>")
+@login_required
+def mark_sold_quick(product_id):
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE listings SET status='sold' WHERE id=%s AND user_id=%s", (product_id, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("✅ Listing marked as sold", "success")
+    except Exception as e:
+        flash(f"❌ Error marking as sold: {e}", "error")
+    return redirect(url_for("my_listings"))
+
+@app.route("/delete-product/<int:product_id>")
+@login_required
+def delete_product(product_id):
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM listings WHERE id=%s AND user_id=%s", (product_id, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("✅ Listing deleted", "success")
+    except Exception as e:
+        flash(f"❌ Error deleting listing: {e}", "error")
+    return redirect(url_for("my_listings"))
+
+@app.route("/edit-product/<int:product_id>", methods=["GET","POST"])
+@login_required
+def edit_product(product_id):
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        if request.method == "POST":
+            title = request.form.get('title') or ''
+            price = request.form.get('price') or ''
+            description = request.form.get('description') or ''
+            location = request.form.get('location') or ''
+            condition = request.form.get('condition') or ''
+            cur.execute("""
+                UPDATE listings SET title=%s, price=%s, description=%s, location=%s, item_condition=%s
+                WHERE id=%s AND user_id=%s
+            """, (title, price, description, location, condition, product_id, user_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+            flash("✅ Listing updated", "success")
+            return redirect(url_for('product_page', product_id=product_id))
+        cur.execute("SELECT * FROM listings WHERE id=%s AND user_id=%s", (product_id, user_id))
+        listing = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not listing:
+            flash("❌ Access denied or listing not found", "error")
+            return redirect(url_for('my_listings'))
+        return render_template("edit_product.html", listing=listing)
+    except Exception as e:
+        flash(f"❌ Error editing listing: {e}", "error")
+        return redirect(url_for("my_listings"))
+
 @app.route("/wishlist/toggle/<int:listing_id>")
 @login_required
 
 def toggle_wishlist(listing_id):
     """Add or remove a listing from the user's wishlist stored in session"""
+    user_id = session.get('user_id')
     wl = session.get('wishlist', [])
+    added = False
+    # Session toggle
     if listing_id in wl:
         wl.remove(listing_id)
-        action = 'removed'
     else:
         wl.append(listing_id)
-        action = 'added'
+        added = True
     session['wishlist'] = wl
+    # DB-backed favorites (create table if needed)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS favorites (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                listing_id INT NOT NULL,
+                created_at DATETIME NOT NULL,
+                UNIQUE KEY uniq_fav (user_id, listing_id),
+                INDEX idx_user (user_id),
+                INDEX idx_listing (listing_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        if added:
+            cur.execute("INSERT IGNORE INTO favorites (user_id, listing_id, created_at) VALUES (%s, %s, NOW())", (user_id, listing_id))
+        else:
+            cur.execute("DELETE FROM favorites WHERE user_id=%s AND listing_id=%s", (user_id, listing_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
+    action = 'added' if added else 'removed'
     flash(f"✅ Wishlist {action}", "success")
     return redirect(url_for('view_listing', listing_id=listing_id))
 
@@ -983,10 +1162,14 @@ def api_wishlist():
 
 
 @app.context_processor
-
 def inject_wishlist_count():
     wl = session.get('wishlist', [])
-    return {'wishlist_count': len(wl)}
+    # also provide common user context for dashboard-based templates
+    return {
+        'wishlist_count': len(wl),
+        'username': session.get('username', 'User'),
+        'role': session.get('role', 'buyer')
+    }
 
 @app.template_filter('imgurl')
 def imgurl(path):
@@ -1001,6 +1184,39 @@ def imgurl(path):
     except Exception:
         return ''
 
+def ensure_chat_tables():
+    """Create conversations/messages tables if they don't exist."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                listing_id INT NOT NULL,
+                buyer_id INT NOT NULL,
+                seller_id INT NOT NULL,
+                created_at DATETIME NOT NULL,
+                last_message_at DATETIME NULL,
+                INDEX idx_listing (listing_id),
+                INDEX idx_participants (buyer_id, seller_id),
+                INDEX idx_last_message (last_message_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                conversation_id INT NOT NULL,
+                sender_id INT NOT NULL,
+                content TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                INDEX idx_conv (conversation_id),
+                INDEX idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 @app.route("/tasks/expire-listings")
 def task_expire_listings():
     """Mark listings expired when free trial or boost expires.
@@ -1022,6 +1238,164 @@ def task_expire_listings():
         return jsonify({"success": True, "expired": affected})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/favorites")
+@login_required
+def favorites():
+    """Render wishlist grid from session."""
+    user_id = session.get('user_id')
+    items = []
+    # Prefer DB favorites if available
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("""
+            SELECT l.id, l.title, l.price, l.photos, l.location
+            FROM favorites f
+            JOIN listings l ON f.listing_id = l.id
+            WHERE f.user_id=%s
+            ORDER BY f.created_at DESC
+        """, (user_id,))
+        items = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        # Fallback to session-based wishlist
+        wl = session.get('wishlist', [])
+        if wl:
+            try:
+                conn = get_db_connection()
+                cur = conn.cursor(dictionary=True)
+                format_ids = ','.join(['%s'] * len(wl))
+                cur.execute(f"SELECT id, title, price, photos, location FROM listings WHERE id IN ({format_ids}) AND status IN ('active','sold')", tuple(wl))
+                items = cur.fetchall()
+                cur.close()
+                conn.close()
+            except Exception:
+                items = []
+    return render_template("favorites.html", items=items)
+
+@app.route("/messages")
+@login_required
+def messages_list():
+    """List conversations for current user."""
+    try:
+        ensure_chat_tables()
+    except Exception:
+        pass
+    user_id = session.get('user_id')
+    convs = []
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("""
+            SELECT c.id, c.listing_id, c.buyer_id, c.seller_id, c.last_message_at
+            FROM conversations c
+            WHERE c.buyer_id=%s OR c.seller_id=%s
+            ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+        """, (user_id, user_id))
+        rows = cur.fetchall()
+        for r in rows:
+            # last message
+            try:
+                cur.execute("SELECT content, created_at FROM messages WHERE conversation_id=%s ORDER BY created_at DESC LIMIT 1", (r['id'],))
+                m = cur.fetchone()
+                last_message = m['content'] if m else None
+                last_time = m['created_at'] if m else r.get('last_message_at')
+            except Exception:
+                last_message, last_time = None, None
+            # product title
+            try:
+                cur.execute("SELECT title FROM listings WHERE id=%s", (r['listing_id'],))
+                pt = cur.fetchone()
+                product_title = pt['title'] if pt else f"Listing #{r['listing_id']}"
+            except Exception:
+                product_title = f"Listing #{r['listing_id']}"
+            # other user name
+            other_id = r['seller_id'] if r['buyer_id'] == user_id else r['buyer_id']
+            try:
+                cur.execute("SELECT username FROM users WHERE id=%s", (other_id,))
+                ou = cur.fetchone()
+                other_user = ou['username'] if ou else f"User #{other_id}"
+            except Exception:
+                other_user = f"User #{other_id}"
+            convs.append({"id": r['id'], "product_title": product_title, "other_user": other_user, "last_message": last_message, "last_time": last_time})
+        cur.close()
+        conn.close()
+    except Exception:
+        convs = []
+    return render_template("messages.html", convs=convs)
+
+@app.route("/profile", methods=["GET","POST"])
+@login_required
+def profile():
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        if request.method == "POST":
+            username = (request.form.get('username') or '').strip()
+            phone = (request.form.get('phone') or '').strip()
+            location = (request.form.get('location') or '').strip()
+            new_password = request.form.get('new_password') or ''
+            if username:
+                try:
+                    cur.execute("UPDATE users SET username=%s WHERE id=%s", (username, user_id))
+                    session['username'] = username
+                except Exception:
+                    pass
+            try:
+                cur.execute("UPDATE users SET phone=%s WHERE id=%s", (phone, user_id))
+            except Exception:
+                pass
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN location VARCHAR(255)")
+            except Exception:
+                pass
+            try:
+                cur.execute("UPDATE users SET location=%s WHERE id=%s", (location, user_id))
+            except Exception:
+                pass
+            if new_password and len(new_password) >= 6:
+                try:
+                    cur.execute("UPDATE users SET password=%s WHERE id=%s", (hash_password(new_password), user_id))
+                except Exception:
+                    pass
+            conn.commit()
+            flash("✅ Profile updated", "success")
+        cur.execute("SELECT id, username, email, phone, created_at, COALESCE(location, '') as location FROM users WHERE id=%s", (user_id,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+        return render_template("profile.html", user=user)
+    except Exception as e:
+        flash(f"❌ Error: {e}", "error")
+        return redirect(url_for('dashboard'))
+
+@app.route("/payments")
+@login_required
+def payments():
+    user_id = session.get('user_id')
+    promotions = []
+    payments = []
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute("SELECT listing_id, boost_type, expires_date FROM product_boosts WHERE user_id=%s AND is_active=1 ORDER BY expires_date DESC", (user_id,))
+            promotions = cur.fetchall()
+        except Exception:
+            promotions = []
+        try:
+            cur.execute("SELECT amount, method, status, created_at FROM payments WHERE user_id=%s ORDER BY created_at DESC", (user_id,))
+            payments = cur.fetchall()
+        except Exception:
+            payments = []
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
+    return render_template("payments.html", promotions=promotions, payments=payments)
 
 @app.route("/seller/<int:user_id>")
 def seller_profile(user_id):

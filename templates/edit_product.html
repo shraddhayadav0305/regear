@@ -1,0 +1,38 @@
+{% extends "dashboard.html" %}
+{% block title %}Edit Listing - ReGear{% endblock %}
+{% block content %}
+<div class="welcome-section">
+    <div class="section-title"><i class="fas fa-edit"></i> Edit Listing</div>
+    <form method="POST" action="/edit-product/{{ listing.id }}" class="row g-3">
+        <div class="col-md-8">
+            <label class="form-label">Title</label>
+            <input class="form-control" type="text" name="title" value="{{ listing.title }}" required>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Price</label>
+            <input class="form-control" type="number" name="price" value="{{ listing.price }}" required>
+        </div>
+        <div class="col-md-12">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" name="description" rows="5">{{ listing.description }}</textarea>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Location</label>
+            <input class="form-control" type="text" name="location" value="{{ listing.location or '' }}">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Condition</label>
+            <select class="form-select" name="condition">
+                {% set cond = listing.item_condition or 'Used' %}
+                <option value="New" {% if cond=='New' %}selected{% endif %}>New</option>
+                <option value="Like New" {% if cond=='Like New' %}selected{% endif %}>Like New</option>
+                <option value="Used" {% if cond=='Used' %}selected{% endif %}>Used</option>
+            </select>
+        </div>
+        <div class="col-12">
+            <button class="btn btn-primary" type="submit">Save Changes</button>
+            <a class="btn btn-outline-secondary" href="/product/{{ listing.id }}">View Listing</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

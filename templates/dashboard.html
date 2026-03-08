@@ -127,6 +127,33 @@
             margin: 0 auto;
             padding: 40px 20px;
         }
+        .sidebar-fixed {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            width: 240px;
+            height: calc(100vh - 70px);
+            background: #fff;
+            border-right: 1px solid #e5e5e5;
+            padding: 16px 10px;
+            z-index: 900;
+        }
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: #002f34;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .sidebar-link:hover { background: #f3f6ff; color: #3949ab; }
+        .sidebar-active { background: #e8ecff; color: #3949ab; }
+        .content-with-sidebar {
+            margin-left: 260px;
+        }
 
         /* ALERT MESSAGES */
         .alert-message {
@@ -401,8 +428,21 @@
         </div>
     </nav>
 
+    <!-- SIDEBAR -->
+    <aside class="sidebar-fixed">
+        <a class="sidebar-link {% if request.path == '/dashboard' %}sidebar-active{% endif %}" href="/dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+        <a class="sidebar-link {% if request.path.startswith('/my-listings') %}sidebar-active{% endif %}" href="/my-listings"><i class="fas fa-list"></i> My Listings</a>
+        <a class="sidebar-link" href="/sell"><i class="fas fa-plus-circle"></i> Post New Ad</a>
+        <a class="sidebar-link {% if request.path.startswith('/favorites') or request.path == '/saved' %}sidebar-active{% endif %}" href="/favorites"><i class="fas fa-heart"></i> Favorites</a>
+        <a class="sidebar-link {% if request.path.startswith('/messages') %}sidebar-active{% endif %}" href="/messages"><i class="fas fa-comments"></i> Messages</a>
+        <a class="sidebar-link {% if request.path.startswith('/profile') %}sidebar-active{% endif %}" href="/profile"><i class="fas fa-user"></i> My Profile</a>
+        <a class="sidebar-link {% if request.path.startswith('/payments') %}sidebar-active{% endif %}" href="/payments"><i class="fas fa-wallet"></i> Payments / Promotions</a>
+        <a class="sidebar-link" href="/profile"><i class="fas fa-cog"></i> Settings</a>
+        <a class="sidebar-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </aside>
+
     <!-- MAIN CONTENT -->
-    <div class="container-wrapper">
+    <div class="container-wrapper content-with-sidebar">
         <!-- FLASH MESSAGES -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}

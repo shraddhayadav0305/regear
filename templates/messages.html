@@ -1,0 +1,22 @@
+{% extends "dashboard.html" %}
+{% block title %}Messages - ReGear{% endblock %}
+{% block content %}
+<div class="welcome-section">
+    <div class="section-title"><i class="fas fa-comments"></i> Messages</div>
+    <div class="list-group">
+        {% if convs %}
+            {% for c in convs %}
+            <a href="/chat/{{ c.id }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                    <div><strong>{{ c.other_user }}</strong> • {{ c.product_title }}</div>
+                    <small class="text-muted">{{ c.last_message or 'No messages yet' }}</small>
+                </div>
+                <small class="text-muted">{{ c.last_time or '' }}</small>
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="text-muted">No conversations yet.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

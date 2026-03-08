@@ -374,3 +374,10 @@ window.adminUtils = {
     makeTableSortable,
     initializeDataTable
 };
+
+// Add event listener for listing cards
+document.querySelectorAll(".listing-card").forEach(card => {
+    card.addEventListener("click", function () {
+        window.location = this.getAttribute("href");
+    });
+});
