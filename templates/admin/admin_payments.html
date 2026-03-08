@@ -3,6 +3,20 @@
 {% block title %}Payments - ReGear Admin{% endblock %}
 
 {% block content %}
+{# Safe defaults so the page renders even if backend omitted context #}
+{% set stats = stats if stats is defined else {
+    'total_revenue': 0,
+    'monthly_revenue': 0,
+    'total_transactions': 0,
+    'avg_transaction': 0
+} %}
+{% set monthly_revenue_labels = monthly_revenue_labels if monthly_revenue_labels is defined else [] %}
+{% set monthly_revenue_data = monthly_revenue_data if monthly_revenue_data is defined else [] %}
+{% set payment_method_labels = payment_method_labels if payment_method_labels is defined else [] %}
+{% set payment_method_counts = payment_method_counts if payment_method_counts is defined else [] %}
+{% set available_months = available_months if available_months is defined else [] %}
+{% set selected_month = selected_month if selected_month is defined else '' %}
+{% set payment_method = payment_method if payment_method is defined else '' %}
 <div class="admin-header mb-4">
     <div>
         <h1 class="mb-2">Payments Management</h1>
@@ -51,7 +65,7 @@
     <div class="row g-3 align-items-end">
         <div class="col-md-3">
             <label class="form-label"><i class="fas fa-calendar"></i> Filter by Month</label>
-            <select class="form-select" id="monthFilter" onchange="window.location.href = `{{ url_for('admin.manage_payments') }}?month=${this.value}`">
+            <select class="form-select" id="monthFilter" onchange="window.location.href = `{{ url_for('admin.revenue') }}?month=${this.value}`">
                 <option value="">All Months</option>
                 {% for month in available_months|reverse %}
                     <option value="{{ month }}" {% if month == selected_month %}selected{% endif %}>{{ month }}</option>
@@ -60,7 +74,7 @@
         </div>
         <div class="col-md-3">
             <label class="form-label"><i class="fas fa-credit-card"></i> Payment Method</label>
-            <select class="form-select" id="methodFilter" onchange="window.location.href = `{{ url_for('admin.manage_payments') }}?method=${this.value}`">
+            <select class="form-select" id="methodFilter" onchange="window.location.href = `{{ url_for('admin.revenue') }}?method=${this.value}`">
                 <option value="">All Methods</option>
                 <option value="credit_card" {% if payment_method == 'credit_card' %}selected{% endif %}>Credit Card</option>
                 <option value="debit_card" {% if payment_method == 'debit_card' %}selected{% endif %}>Debit Card</option>

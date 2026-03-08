@@ -11,6 +11,14 @@ import json
 # Admin Blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
+@admin_bp.context_processor
+def inject_admin_defaults():
+    return {
+        'stats': {
+            'pending_complaints': 0
+        }
+    }
+
 def get_db_connection():
     """Get database connection"""
     return mysql.connector.connect(
@@ -146,6 +154,234 @@ def dashboard():
     except Exception as e:
         flash(f"❌ Error loading dashboard: {str(e)}", "error")
         return redirect(url_for("home"))
+
+# ==============================
+# BOOSTED LISTINGS
+# ==============================
+@admin_bp.route("/boosted")
+@admin_required
+def boosted_listings():
+    """Manage boosted/promotion listings"""
+    records = []
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("""
+            SELECT pb.id, pb.listing_id, pb.user_id, pb.boost_type, pb.price, pb.days_active,
+                   pb.created_at as start_date, pb.expires_at as end_date,
+                   l.title, u.username
+            FROM product_boosts pb
+            JOIN listings l ON pb.listing_id = l.id
+            JOIN users u ON pb.user_id = u.id
+            ORDER BY pb.created_at DESC
+        """)
+        records = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception:
+        records = []
+    return render_template("admin/admin_boosted.html", records=records)
+
+# ==============================
+# CATEGORIES MANAGEMENT (index)
+# ==============================
+@admin_bp.route("/categories")
+@admin_required
+def manage_categories():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT id, name, icon FROM categories ORDER BY name")
+        categories = cur.fetchall()
+        cur.close()
+        conn.close()
+        return render_template("admin/admin_categories.html", categories=categories)
+    except Exception as e:
+        flash(f"❌ Error loading categories: {e}", "error")
+        return redirect(url_for("admin.dashboard"))
+
+# ==============================
+# TRANSACTIONS & REVENUE
+# ==============================
+@admin_bp.route("/revenue")
+@admin_required
+def revenue():
+    payments = []
+    stats = {
+        "total_revenue": 0,
+        "monthly_revenue": 0,
+        "total_transactions": 0,
+        "avg_transaction": 0
+    }
+    monthly_revenue_labels = []
+    monthly_revenue_data = []
+    payment_method_labels = []
+    payment_method_counts = []
+    available_months = []
+    selected_month = request.args.get('month', '')
+    payment_method = request.args.get('method', '')
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+
+        # Stats
+        try:
+            cur.execute("SELECT COALESCE(SUM(amount),0) as total FROM payments WHERE status='paid'")
+            stats["total_revenue"] = cur.fetchone()["total"]
+        except Exception:
+            stats["total_revenue"] = 0
+
+        try:
+            cur.execute("SELECT COALESCE(SUM(amount),0) as total FROM payments WHERE status='paid' AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
+            stats["monthly_revenue"] = cur.fetchone()["total"]
+        except Exception:
+            stats["monthly_revenue"] = 0
+
+        try:
+            cur.execute("SELECT COUNT(*) as cnt, COALESCE(AVG(amount),0) as avg_amt FROM payments WHERE status='paid'")
+            row = cur.fetchone()
+            stats["total_transactions"] = row["cnt"]
+            stats["avg_transaction"] = row["avg_amt"]
+        except Exception:
+            pass
+
+        # Monthly revenue trend (last 6 months)
+        try:
+            cur.execute("""
+                SELECT DATE_FORMAT(created_at, '%b %Y') as ym, SUM(amount) as amt
+                FROM payments 
+                WHERE status='paid' 
+                AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+                ORDER BY MIN(created_at)
+            """)
+            rows = cur.fetchall()
+            monthly_revenue_labels = [r["ym"] for r in rows]
+            monthly_revenue_data = [float(r["amt"]) for r in rows]
+        except Exception:
+            monthly_revenue_labels = []
+            monthly_revenue_data = []
+
+        # Payment method distribution
+        try:
+            cur.execute("""
+                SELECT method as payment_method, COUNT(*) as cnt 
+                FROM payments 
+                WHERE status='paid'
+                GROUP BY method
+            """)
+            rows = cur.fetchall()
+            payment_method_labels = [ (r["payment_method"] or "unknown").title().replace('_',' ') for r in rows ]
+            payment_method_counts = [ r["cnt"] for r in rows ]
+        except Exception:
+            payment_method_labels = []
+            payment_method_counts = []
+
+        # Available months dropdown
+        try:
+            cur.execute("""
+                SELECT DISTINCT DATE_FORMAT(created_at, '%b %Y') as ym
+                FROM payments
+                ORDER BY MIN(created_at) DESC
+            """)
+            available_months = [r["ym"] for r in cur.fetchall()]
+        except Exception:
+            available_months = []
+
+        # Payments table (join users and compute gst/total)
+        where = []
+        params = []
+        if selected_month:
+            where.append("DATE_FORMAT(p.created_at, '%b %Y') = %s")
+            params.append(selected_month)
+        if payment_method:
+            where.append("p.method = %s")
+            params.append(payment_method)
+        where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+        try:
+            cur.execute(f"""
+                SELECT p.id, p.user_id, p.amount, p.method as payment_method, p.status, p.created_at as paid_at,
+                       u.username, u.email
+                FROM payments p
+                JOIN users u ON p.user_id = u.id
+                {where_sql}
+                ORDER BY p.created_at DESC
+                LIMIT 200
+            """, tuple(params))
+            rows = cur.fetchall()
+            payments = []
+            for r in rows:
+                amt = float(r["amount"] or 0)
+                gst = round(amt * 0.18, 2)
+                total = round(amt + gst, 2)
+                payments.append({
+                    "id": r["id"],
+                    "username": r.get("username", "User"),
+                    "email": r.get("email", ""),
+                    "plan": None,
+                    "amount": amt,
+                    "gst": gst,
+                    "total_amount": total,
+                    "payment_method": r.get("payment_method", "unknown"),
+                    "paid_at": r.get("paid_at")
+                })
+        except Exception:
+            payments = []
+
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
+
+    return render_template(
+        "admin/admin_payments.html",
+        payments=payments,
+        stats=stats,
+        monthly_revenue_labels=monthly_revenue_labels,
+        monthly_revenue_data=monthly_revenue_data,
+        payment_method_labels=payment_method_labels,
+        payment_method_counts=payment_method_counts,
+        available_months=available_months,
+        selected_month=selected_month,
+        payment_method=payment_method
+    )
+
+# ==============================
+# ANALYTICS & INSIGHTS
+# ==============================
+@admin_bp.route("/analytics")
+@admin_required
+def analytics():
+    insights = {
+        "active_sellers": 0,
+        "top_category": "",
+        "top_category_count": 0,
+        "new_users_this_month": 0,
+        "new_users_this_year": 0,
+        "avg_users_per_day": 0,
+        "seller_activity_rate": 0,
+        "subscription_mix": {
+            "basic": 0,
+            "standard": 0,
+            "premium": 0
+        },
+        "category_labels": [],
+        "category_counts": [],
+        "peak_revenue_day": "",
+        "most_sold_category": "",
+        "avg_listing_price": 0,
+        "churn_rate": 0
+    }
+    return render_template("admin/admin_insights.html", insights=insights)
+
+# ==============================
+# SETTINGS
+# ==============================
+@admin_bp.route("/settings")
+@admin_required
+def settings():
+    return render_template("admin/admin_settings.html")
 
 # ==============================
 # USER MANAGEMENT ROUTES

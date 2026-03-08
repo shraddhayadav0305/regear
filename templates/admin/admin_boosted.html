@@ -1,0 +1,62 @@
+{% extends "admin/admin_layout.html" %}
+{% block title %}Boosted Listings - ReGear Admin{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="fas fa-bullhorn me-2"></i> Boosted Listings</h2>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-outline-secondary">Back to Dashboard</a>
+    </div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Listing</th>
+                        <th>Seller</th>
+                        <th>Boost Type</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Price</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% if records %}
+                    {% for r in records %}
+                    <tr>
+                        <td>#{{ r.id }}</td>
+                        <td>
+                            <a href="{{ url_for('view_listing', listing_id=r.listing_id) }}" target="_blank">
+                                {{ r.title[:48] }}{% if r.title|length>48 %}…{% endif %}
+                            </a>
+                            <div class="text-muted small">ID: {{ r.listing_id }}</div>
+                        </td>
+                        <td>{{ r.username }}</td>
+                        <td><span class="badge bg-primary">{{ r.boost_type|capitalize }}</span></td>
+                        <td><small>{{ r.start_date }}</small></td>
+                        <td><small>{{ r.end_date or '-' }}</small></td>
+                        <td>₹{{ r.price or 0 }}</td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a class="btn btn-outline-primary" href="{{ url_for('view_listing', listing_id=r.listing_id) }}" target="_blank">View</a>
+                                <button class="btn btn-outline-warning" disabled>Extend</button>
+                                <button class="btn btn-outline-danger" disabled>Cancel</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            No boosted listings found.
+                        </td>
+                    </tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

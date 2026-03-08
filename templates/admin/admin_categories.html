@@ -39,7 +39,7 @@
                     {% for category in categories %}
                         <tr>
                             <td>
-                                <span class="badge bg-primary">{{ category.display_order }}</span>
+                                <span class="badge bg-primary">{{ category.display_order if category.display_order is defined else '—' }}</span>
                             </td>
                             <td>
                                 <strong>{{ category.name }}</strong>
@@ -72,10 +72,14 @@
                                 </span>
                             </td>
                             <td>
-                                {% if category.is_active %}
-                                    <span class="badge bg-success">Active</span>
+                                {% if category.is_active is defined %}
+                                    {% if category.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
                                 {% else %}
-                                    <span class="badge bg-secondary">Inactive</span>
+                                    <span class="badge bg-info">N/A</span>
                                 {% endif %}
                             </td>
                             <td>

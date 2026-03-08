@@ -70,10 +70,9 @@
                             <select name="filter_type_id" class="form-select" required id="filterTypeSelect">
                                 <option value="">-- Choose Filter --</option>
                                 {% for af in all_filters %}
-                                    {% set already_assigned = af.id in [a.filter_id for a in assigned_filters] %}
-                                    <option value="{{ af.id }}" {% if already_assigned %}disabled{% endif %}>
+                                    <option value="{{ af.id }}" {% if assigned_filters|selectattr('filter_id', 'equalto', af.id)|list|length > 0 %}disabled{% endif %}>
                                         {{ af.name }} ({{ af.type }})
-                                        {% if already_assigned %}- Already Assigned{% endif %}
+                                        {% if assigned_filters|selectattr('filter_id', 'equalto', af.id)|list|length > 0 %}- Already Assigned{% endif %}
                                     </option>
                                 {% endfor %}
                             </select>
@@ -122,7 +121,9 @@
 <script>
 function removeFilter(filterId, filterName) {
     if (confirm(`Remove "${filterName}" from this category?`)) {
-        fetch(`{{ url_for('categories.admin_remove_filter', category_filter_id='REPLACE') }}`.replace('REPLACE', filterId), {
+        const baseUrl = "{{ url_for('categories.admin_remove_filter', category_filter_id=0) }}";
+        const removeUrl = baseUrl.replace(/0$/, String(filterId));
+        fetch(removeUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

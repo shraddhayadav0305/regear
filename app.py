@@ -1468,8 +1468,8 @@ def admin_dashboard():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        cursor.execute("SELECT COUNT(*) as total FROM users")
-        total_users = cursor.fetchone()["total"]
+        cursor.execute("SELECT COUNT(*) as total_users FROM users")
+        total_users = cursor.fetchone()["total_users"]
 
         cursor.execute("SELECT COUNT(*) as buyers FROM users WHERE role='buyer'")
         buyers = cursor.fetchone()["buyers"]
@@ -1554,6 +1554,52 @@ def not_found(error):
 def server_error(error):
     flash("❌ Server error! Please try again.", "error")
     return redirect(url_for("home"))
+
+@app.route('/transactions')
+@admin_required
+def transactions():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Fetch boost payments
+    cursor.execute("SELECT SUM(amount) AS boost_payments FROM transactions WHERE type = 'boost'")
+    boost_payments = cursor.fetchone()['boost_payments'] or 0
+
+    # Fetch featured listing payments
+    cursor.execute("SELECT SUM(amount) AS featured_payments FROM transactions WHERE type = 'featured'")
+    featured_payments = cursor.fetchone()['featured_payments'] or 0
+
+    # Fetch subscription payments
+    cursor.execute("SELECT SUM(amount) AS subscription_payments FROM transactions WHERE type = 'subscription'")
+    subscription_payments = cursor.fetchone()['subscription_payments'] or 0
+
+    # Fetch pending complaints
+    cursor.execute("SELECT COUNT(*) AS pending_complaints FROM complaints WHERE status = 'pending'")
+    pending_complaints = cursor.fetchone()['pending_complaints'] or 0
+
+    # Fetch revenue by day
+    cursor.execute("SELECT DATE(created_at) AS date, SUM(amount) AS daily_revenue FROM transactions GROUP BY DATE(created_at)")
+    revenue_by_day = cursor.fetchall()
+
+    # Fetch revenue by category
+    cursor.execute("SELECT category, SUM(amount) AS category_revenue FROM transactions JOIN listings ON transactions.listing_id = listings.id GROUP BY category")
+    revenue_by_category = cursor.fetchall()
+
+    # Fetch top paying sellers
+    cursor.execute("SELECT users.username, SUM(transactions.amount) AS total_revenue FROM transactions JOIN users ON transactions.user_id = users.id GROUP BY users.username ORDER BY total_revenue DESC LIMIT 5")
+    top_paying_sellers = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    stats = {
+        'boost_payments': boost_payments,
+        'featured_payments': featured_payments,
+        'subscription_payments': subscription_payments,
+        'pending_complaints': pending_complaints
+    }
+
+    return render_template('transactions.html', stats=stats, revenue_by_day=revenue_by_day, revenue_by_category=revenue_by_category, top_paying_sellers=top_paying_sellers)
 
 if __name__ == "__main__":
     import sys

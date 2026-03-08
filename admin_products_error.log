@@ -1,0 +1,39 @@
+---
+Time: 2026-03-08 21:58:11.406039
+Error: Could not build url for endpoint 'admin.boosted_listings'. Did you mean 'boost_listing' instead?
+Trace:
+Traceback (most recent call last):
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\routes\admin.py", line 373, in manage_products
+    return render_template("admin/admin_products.html",
+                         products=products,
+    ...<3 lines>...
+                         search=search,
+                         total=total)
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\.venv\Lib\site-packages\flask\templating.py", line 150, in render_template
+    return _render(app, template, context)
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\.venv\Lib\site-packages\flask\templating.py", line 131, in _render
+    rv = template.render(context)
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\.venv\Lib\site-packages\jinja2\environment.py", line 1295, in render
+    self.environment.handle_exception()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\.venv\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\templates\admin\admin_products.html", line 1, in top-level template code
+    {% extends "admin/admin_layout.html" %}
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\templates\admin\admin_layout.html", line 70, in top-level template code
+    href="{{ url_for('admin.boosted_listings') }}">
+    
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\.venv\Lib\site-packages\flask\app.py", line 1121, in url_for
+    return self.handle_url_build_error(error, endpoint, values)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\.venv\Lib\site-packages\flask\app.py", line 1110, in url_for
+    rv = url_adapter.build(  # type: ignore[union-attr]
+        endpoint,
+    ...<3 lines>...
+        force_external=_external,
+    )
+  File "C:\Users\sysadmin\OneDrive\Desktop\regear\.venv\Lib\site-packages\werkzeug\routing\map.py", line 924, in build
+    raise BuildError(endpoint, values, method, self)
+werkzeug.routing.exceptions.BuildError: Could not build url for endpoint 'admin.boosted_listings'. Did you mean 'boost_listing' instead?
+

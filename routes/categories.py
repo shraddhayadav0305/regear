@@ -120,7 +120,7 @@ def api_get_category(slug):
         
         # Get filters for this category
         cursor.execute("""
-            SELECT cf.id, ft.name, ft.slug, ft.type, cf.is_required, cf.display_order, cf.filter_config
+            SELECT cf.id, ft.name, ft.type, cf.is_required, cf.display_order, cf.filter_config
             FROM category_filters cf
             JOIN filter_types ft ON cf.filter_type_id = ft.id
             WHERE cf.category_id = %s AND ft.is_active = 1
@@ -219,9 +219,9 @@ def admin_list_categories():
         cursor = conn.cursor(dictionary=True)
         
         cursor.execute("""
-            SELECT id, name, slug, description, icon, is_active, display_order, created_at
+            SELECT id, name, description, icon, created_at
             FROM categories
-            ORDER BY display_order
+            ORDER BY name
         """)
         categories = cursor.fetchall()
         
@@ -241,38 +241,26 @@ def admin_create_category():
     if request.method == 'POST':
         try:
             name = request.form.get('name', '').strip()
-            slug = request.form.get('slug', '').strip().lower()
             description = request.form.get('description', '').strip()
             icon = request.form.get('icon', '').strip()
-            color = request.form.get('color', '#0066cc').strip()
-            display_order = request.form.get('display_order', 999)
             
-            if not name or not slug:
-                flash("❌ Name and slug are required", "error")
+            if not name:
+                flash("❌ Name is required", "error")
                 return redirect(url_for('categories.admin_create_category'))
             
             conn = get_db_connection()
             cursor = conn.cursor()
             
-            # Check if slug already exists
-            cursor.execute("SELECT id FROM categories WHERE slug = %s", (slug,))
-            if cursor.fetchone():
-                flash("❌ Slug already exists", "error")
-                cursor.close()
-                conn.close()
-                return redirect(url_for('categories.admin_create_category'))
-            
             cursor.execute("""
-                INSERT INTO categories (name, slug, description, icon, color, display_order)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (name, slug, description, icon, color, display_order))
+                INSERT INTO categories (name, description, icon)
+                VALUES (%s, %s, %s)
+            """, (name, description, icon))
             
             conn.commit()
             cursor.close()
             conn.close()
             
             flash(f"✅ Category '{name}' created successfully", "success")
-            return redirect(url_for('categories.admin_list_categories'))
             
         except Exception as e:
             flash(f"❌ Error: {str(e)}", "error")
@@ -290,31 +278,18 @@ def admin_edit_category(category_id):
         
         if request.method == 'POST':
             name = request.form.get('name', '').strip()
-            slug = request.form.get('slug', '').strip().lower()
             description = request.form.get('description', '').strip()
             icon = request.form.get('icon', '').strip()
-            color = request.form.get('color', '#0066cc').strip()
-            display_order = request.form.get('display_order', 999)
-            is_active = int(request.form.get('is_active', 1))
             
-            if not name or not slug:
-                flash("❌ Name and slug are required", "error")
-                return redirect(url_for('categories.admin_edit_category', category_id=category_id))
-            
-            # Check if slug already exists (for different category)
-            cursor.execute("SELECT id FROM categories WHERE slug = %s AND id != %s", (slug, category_id))
-            if cursor.fetchone():
-                flash("❌ Slug already exists", "error")
-                cursor.close()
-                conn.close()
+            if not name:
+                flash("❌ Name is required", "error")
                 return redirect(url_for('categories.admin_edit_category', category_id=category_id))
             
             cursor.execute("""
                 UPDATE categories 
-                SET name = %s, slug = %s, description = %s, icon = %s, color = %s, 
-                    display_order = %s, is_active = %s
+                SET name = %s, description = %s, icon = %s
                 WHERE id = %s
-            """, (name, slug, description, icon, color, display_order, is_active, category_id))
+            """, (name, description, icon, category_id))
             
             conn.commit()
             flash(f"✅ Category updated successfully", "success")
@@ -324,7 +299,7 @@ def admin_edit_category(category_id):
         
         # GET: Show edit form
         cursor.execute("""
-            SELECT id, name, slug, description, icon, color, display_order, is_active
+            SELECT id, name, description, icon
             FROM categories
             WHERE id = %s
         """, (category_id,))
@@ -392,7 +367,7 @@ def admin_list_subcategories():
                    sc.is_active, sc.display_order
             FROM sub_categories sc
             JOIN categories c ON sc.category_id = c.id
-            ORDER BY c.display_order, sc.display_order
+            ORDER BY c.name, sc.display_order
         """)
         subcategories = cursor.fetchall()
         
@@ -499,7 +474,7 @@ def admin_edit_subcategory(subcategory_id):
             conn.close()
             return redirect(url_for('categories.admin_list_subcategories'))
         
-        cursor.execute("SELECT id, name FROM categories WHERE is_active = 1 ORDER BY display_order")
+        cursor.execute("SELECT id, name FROM categories ORDER BY display_order")
         categories = cursor.fetchall()
         
         cursor.close()
@@ -566,7 +541,7 @@ def admin_category_filters(category_id):
         
         # Get assigned filters
         cursor.execute("""
-            SELECT cf.id, ft.id as filter_id, ft.name, ft.slug, ft.type, cf.is_required, cf.display_order
+            SELECT cf.id, ft.id as filter_id, ft.name, ft.type, cf.is_required, cf.display_order
             FROM category_filters cf
             JOIN filter_types ft ON cf.filter_type_id = ft.id
             WHERE cf.category_id = %s
@@ -576,7 +551,7 @@ def admin_category_filters(category_id):
         
         # Get all available filters
         cursor.execute("""
-            SELECT id, name, slug, type FROM filter_types WHERE is_active = 1 ORDER BY name
+            SELECT id, name, type FROM filter_types WHERE is_active = 1 ORDER BY name
         """)
         all_filters = cursor.fetchall()
         

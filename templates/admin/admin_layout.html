@@ -64,14 +64,54 @@
                         </a>
                     </li>
 
+                    <!-- Boosted Listings -->
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.endpoint == 'admin.boosted_listings' %}active{% endif %}" 
+                           href="{{ url_for('admin.boosted_listings') }}">
+                            <i class="fas fa-bullhorn"></i> Boosted Listings
+                        </a>
+                    </li>
+
+                    <!-- Categories Management -->
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.endpoint == 'admin.manage_categories' %}active{% endif %}" 
+                           href="{{ url_for('admin.manage_categories') }}">
+                            <i class="fas fa-tags"></i> Categories
+                        </a>
+                    </li>
+
                     <!-- Complaints -->
                     <li class="nav-item mb-2">
                         <a class="nav-link {% if request.endpoint == 'admin.manage_complaints' %}active{% endif %}" 
                            href="{{ url_for('admin.manage_complaints') }}">
                             <i class="fas fa-exclamation-circle"></i> Complaints
-                            {% if stats and stats.pending_complaints > 0 %}
-                            <span class="badge bg-danger ms-2">{{ stats.pending_complaints }}</span>
+                            {% if stats is defined and (stats.pending_complaints|default(0)) > 0 %}
+                            <span class="badge bg-danger ms-2">{{ stats.pending_complaints|default(0) }}</span>
                             {% endif %}
+                        </a>
+                    </li>
+
+                    <!-- Transactions & Revenue -->
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.endpoint == 'admin.revenue' %}active{% endif %}"
+                           href="{{ url_for('admin.revenue') }}">
+                            <i class="fas fa-wallet"></i> Transactions & Revenue
+                        </a>
+                    </li>
+
+                    <!-- Analytics & Insights -->
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.endpoint == 'admin.analytics' %}active{% endif %}"
+                           href="{{ url_for('admin.analytics') }}">
+                            <i class="fas fa-chart-line"></i> Analytics & Insights
+                        </a>
+                    </li>
+
+                    <!-- Settings -->
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.endpoint == 'admin.settings' %}active{% endif %}"
+                           href="{{ url_for('admin.settings') }}">
+                            <i class="fas fa-cog"></i> Settings
                         </a>
                     </li>
 

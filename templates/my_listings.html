@@ -38,7 +38,7 @@
                                         {% endif %}
                                     </p>
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Actions">
-                                        <a href="/product/{{ ad.id }}" class="btn btn-primary">View Listing</a>
+                                    <a href="{{ url_for('view_listing', listing_id=ad.id) }}" class="btn btn-primary">View Listing</a>
                                         <a href="/edit-product/{{ ad.id }}" class="btn btn-outline-secondary">Edit</a>
                                         <a href="/promotion/{{ ad.id }}" class="btn btn-outline-warning">Promote</a>
                                         <a href="/mark-sold/{{ ad.id }}" class="btn btn-outline-success" onclick="return confirm('Mark this item as sold?');">Mark as Sold</a>

@@ -25,13 +25,13 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">Slug (URL-friendly) *</label>
-                            <input type="text" name="slug" class="form-control" required 
-                                   value="{{ category.slug if category else '' }}"
+                            <label class="form-label">Slug (URL-friendly)</label>
+                            <input type="text" name="slug" class="form-control" 
+                                   value="{{ category.slug if category and category.slug is defined else '' }}"
                                    placeholder="e.g., mobile-phones"
                                    pattern="[a-z0-9-]+"
                                    title="Only lowercase letters, numbers, and hyphens">
-                            <small class="text-muted">Used for URLs and APIs</small>
+                            <small class="text-muted">Optional; used for URLs and APIs if supported</small>
                         </div>
 
                         <div class="mb-3">
@@ -46,9 +46,9 @@
                         <div class="mb-3">
                             <label class="form-label">Color (HEX)</label>
                             <input type="color" name="color" class="form-control form-control-color" 
-                                   value="{{ category.color if category else '#0066cc' }}"
+                                   value="{{ '#0066cc' }}"
                                    style="height: 40px;">
-                            <small class="text-muted">Primary color for category</small>
+                            <small class="text-muted">UI-only; not stored in database</small>
                         </div>
 
                         <div class="mb-3">
@@ -60,11 +60,11 @@
                         <div class="mb-3">
                             <label class="form-label">Display Order</label>
                             <input type="number" name="display_order" class="form-control" 
-                                   value="{{ category.display_order if category else '0' }}" min="0">
+                                   value="{{ category.display_order if category and category.display_order is defined else '0' }}" min="0">
                             <small class="text-muted">Lower numbers appear first</small>
                         </div>
 
-                        {% if mode == 'edit' %}
+                        {% if mode == 'edit' and category.is_active is defined %}
                             <div class="mb-3">
                                 <label class="form-label">Status</label>
                                 <div class="form-check">
