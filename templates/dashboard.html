@@ -443,6 +443,7 @@
 
     <!-- MAIN CONTENT -->
     <div class="container-wrapper content-with-sidebar">
+        {% block content %}
         <!-- FLASH MESSAGES -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -564,6 +565,7 @@
                 </div>
             </div>
         </div>
+        {% endblock %}
     </div>
 
     <!-- Bootstrap JS -->

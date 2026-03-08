@@ -91,14 +91,24 @@ def home():
         cursor = conn.cursor(dictionary=True)
         
         # Fetch recent approved listings (latest 12)
-        cursor.execute("""
-            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
-            FROM listings l
-            JOIN users u ON l.user_id = u.id
-            WHERE l.approval_status='approved' AND l.status='active'
-            ORDER BY l.created_at DESC
-            LIMIT 12
-        """)
+        try:
+            cursor.execute("""
+                SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
+                FROM listings l
+                JOIN users u ON l.user_id = u.id
+                WHERE l.approval_status='approved' AND l.status='active'
+                ORDER BY l.created_at DESC
+                LIMIT 12
+            """)
+        except Exception:
+            cursor.execute("""
+                SELECT l.id, l.title, l.category, l.subcategory, l.price, '' AS location, l.created_at, l.photos, u.username
+                FROM listings l
+                JOIN users u ON l.user_id = u.id
+                WHERE l.approval_status='approved' AND l.status='active'
+                ORDER BY l.created_at DESC
+                LIMIT 12
+            """)
         
         featured_listings = cursor.fetchall()
         cursor.close()
@@ -672,32 +682,114 @@ def post_ad_form():
 @app.route("/my-listings")
 @login_required
 def my_listings():
-    """View my listings (for sellers)"""
     try:
         user_id = session.get('user_id')
         username = session.get('username', 'User')
         role = session.get('role', 'buyer')
+        status_filter = (request.args.get('status') or '').strip()
+        q = (request.args.get('q') or '').strip()
+        sort = (request.args.get('sort') or 'new').strip()
+        page = request.args.get('page', 1, type=int)
+        per_page = 10
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-
-        cursor.execute("""
-            SELECT id, title, category, subcategory, price, status, approval_status, created_at, photos
-            FROM listings 
-            WHERE user_id=%s 
-            ORDER BY created_at DESC
-        """, (user_id,))
-
-        listings = cursor.fetchall()
-        print("DEBUG: Listings fetched:", listings)  # Debug log to verify fetched data
+        base = (
+            "SELECT l.id, l.title, l.category, l.subcategory, l.price, l.status, "
+            "l.approval_status, l.created_at, l.photos, l.location, l.view_count, "
+            "(pb.id IS NOT NULL) AS boosted "
+            "FROM listings l "
+            "LEFT JOIN product_boosts pb ON pb.listing_id = l.id AND (pb.expires_at IS NULL OR pb.expires_at > NOW()) "
+            "WHERE l.user_id=%s"
+        )
+        params = [user_id]
+        if status_filter == 'active':
+            base += " AND l.status='active'"
+        elif status_filter == 'pending':
+            base += " AND l.approval_status='pending'"
+        elif status_filter == 'sold':
+            base += " AND (l.status='sold' OR l.approval_status='sold')"
+        elif status_filter == 'rejected':
+            base += " AND l.approval_status='rejected'"
+        elif status_filter == 'approved':
+            base += " AND l.approval_status='approved'"
+        if q:
+            base += " AND (l.title LIKE %s OR l.category LIKE %s)"
+            like_q = f"%{q}%"
+            params.extend([like_q, like_q])
+        order_sql = " ORDER BY l.created_at DESC"
+        if sort == 'old':
+            order_sql = " ORDER BY l.created_at ASC"
+        elif sort == 'price_asc':
+            order_sql = " ORDER BY l.price ASC"
+        elif sort == 'price_desc':
+            order_sql = " ORDER BY l.price DESC"
+        elif sort == 'views_desc':
+            order_sql = " ORDER BY l.view_count DESC"
+        count_sql = "SELECT COUNT(*) as total FROM listings l WHERE l.user_id=%s"
+        count_params = [user_id]
+        if status_filter == 'active':
+            count_sql += " AND l.status='active'"
+        elif status_filter == 'pending':
+            count_sql += " AND l.approval_status='pending'"
+        elif status_filter == 'sold':
+            count_sql += " AND (l.status='sold' OR l.approval_status='sold')"
+        elif status_filter == 'rejected':
+            count_sql += " AND l.approval_status='rejected'"
+        elif status_filter == 'approved':
+            count_sql += " AND l.approval_status='approved'"
+        if q:
+            count_sql += " AND (l.title LIKE %s OR l.category LIKE %s)"
+            like_q2 = f"%{q}%"
+            count_params.extend([like_q2, like_q2])
+        cursor.execute(count_sql, count_params)
+        row = cursor.fetchone()
+        total = row['total'] if row else 0
+        offset = (page - 1) * per_page
+        base += order_sql + " LIMIT %s OFFSET %s"
+        params.extend([per_page, offset])
+        try:
+            cursor.execute(base, params)
+            listings = cursor.fetchall()
+        except Exception:
+            cursor.execute(
+                "SELECT id, title, category, subcategory, price, status, approval_status, created_at, photos "
+                "FROM listings WHERE user_id=%s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                [user_id, per_page, offset]
+            )
+            listings = cursor.fetchall()
         cursor.close()
         conn.close()
-
-        return render_template("my_listings.html", listings=listings, username=username, role=role)
-
+        now = datetime.now()
+        enriched = []
+        for l in listings:
+            d = dict(l)
+            try:
+                d['days_active'] = max(0, (now - d['created_at']).days) if d.get('created_at') else 0
+            except Exception:
+                d['days_active'] = 0
+            d['favorites_count'] = 0
+            d['boosted'] = bool(d.get('boosted'))
+            enriched.append(d)
+        total_pages = (total + per_page - 1) // per_page
+        return render_template(
+            "my_listings.html",
+            listings=enriched,
+            username=username,
+            role=role,
+            status_filter=status_filter,
+            q=q,
+            sort=sort,
+            current_page=page,
+            total_pages=total_pages
+        )
     except Exception as e:
-        print("DEBUG: Error loading listings:", str(e))  # Debug log for errors
         flash(f"❌ Error loading listings: {str(e)}", "error")
         return redirect(url_for("dashboard"))
+
+@app.route("/dashboard/my-listings")
+@login_required
+def my_listings_alias():
+    return my_listings()
 
 @app.route("/browse")
 def browse():
@@ -731,8 +823,12 @@ def browse():
             params.extend([search_param, search_param, search_param])
         
         query += " ORDER BY l.created_at DESC"
-        
-        cursor.execute(query, params)
+        # Try with location column; if missing, fallback selecting literal for location
+        try:
+            cursor.execute(query, params)
+        except Exception:
+            query = query.replace("l.location", "'' AS location")
+            cursor.execute(query, params)
         listings = cursor.fetchall()
         
         # Get all categories for the filter dropdown
@@ -1257,13 +1353,22 @@ def favorites():
     try:
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        cur.execute("""
-            SELECT l.id, l.title, l.price, l.photos, l.location
-            FROM favorites f
-            JOIN listings l ON f.listing_id = l.id
-            WHERE f.user_id=%s
-            ORDER BY f.created_at DESC
-        """, (user_id,))
+        try:
+            cur.execute("""
+                SELECT l.id, l.title, l.price, l.photos, l.location
+                FROM favorites f
+                JOIN listings l ON f.listing_id = l.id
+                WHERE f.user_id=%s
+                ORDER BY f.created_at DESC
+            """, (user_id,))
+        except Exception:
+            cur.execute("""
+                SELECT l.id, l.title, l.price, l.photos, '' AS location
+                FROM favorites f
+                JOIN listings l ON f.listing_id = l.id
+                WHERE f.user_id=%s
+                ORDER BY f.created_at DESC
+            """, (user_id,))
         items = cur.fetchall()
         cur.close()
         conn.close()
@@ -1275,7 +1380,10 @@ def favorites():
                 conn = get_db_connection()
                 cur = conn.cursor(dictionary=True)
                 format_ids = ','.join(['%s'] * len(wl))
-                cur.execute(f"SELECT id, title, price, photos, location FROM listings WHERE id IN ({format_ids}) AND status IN ('active','sold')", tuple(wl))
+                try:
+                    cur.execute(f"SELECT id, title, price, photos, location FROM listings WHERE id IN ({format_ids}) AND status IN ('active','sold')", tuple(wl))
+                except Exception:
+                    cur.execute(f"SELECT id, title, price, photos, '' AS location FROM listings WHERE id IN ({format_ids}) AND status IN ('active','sold')", tuple(wl))
                 items = cur.fetchall()
                 cur.close()
                 conn.close()
@@ -1371,8 +1479,14 @@ def profile():
                     pass
             conn.commit()
             flash("✅ Profile updated", "success")
-        cur.execute("SELECT id, username, email, phone, created_at, COALESCE(location, '') as location FROM users WHERE id=%s", (user_id,))
-        user = cur.fetchone()
+        try:
+            cur.execute("SELECT id, username, email, phone, created_at, COALESCE(location, '') as location FROM users WHERE id=%s", (user_id,))
+            user = cur.fetchone()
+        except Exception:
+            cur.execute("SELECT id, username, email, phone, created_at FROM users WHERE id=%s", (user_id,))
+            user = cur.fetchone()
+            if user and isinstance(user, dict):
+                user['location'] = ''
         cur.close()
         conn.close()
         return render_template("profile.html", user=user)

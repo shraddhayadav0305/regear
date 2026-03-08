@@ -1,20 +1,65 @@
 {% extends "dashboard.html" %}
 
-{% block title %}My Ads - ReGear{% endblock %}
+{% block title %}My Listings - ReGear{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2>My Ads</h2>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1">My Listings</h2>
+            <p class="text-muted mb-0">Manage all the items you have posted.</p>
+        </div>
+        <div>
+            <a href="{{ url_for('post_ad_form') }}" class="btn btn-primary"><i class="fas fa-plus-circle"></i> Post New Item</a>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-2">
+                <div class="col-12 col-md-6">
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('my_listings') }}" class="btn btn-outline-secondary {% if not status_filter %}active{% endif %}">All</a>
+                        <a href="{{ url_for('my_listings', status='active', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='active' %}active{% endif %}">Active</a>
+                        <a href="{{ url_for('my_listings', status='pending', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='pending' %}active{% endif %}">Pending</a>
+                        <a href="{{ url_for('my_listings', status='approved', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='approved' %}active{% endif %}">Approved</a>
+                        <a href="{{ url_for('my_listings', status='sold', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='sold' %}active{% endif %}">Sold</a>
+                        <a href="{{ url_for('my_listings', status='rejected', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='rejected' %}active{% endif %}">Rejected</a>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <input type="text" name="q" value="{{ q or '' }}" class="form-control" placeholder="Search title or category">
+                </div>
+                <div class="col-6 col-md-3">
+                    <select name="sort" class="form-select">
+                        <option value="new" {% if sort=='new' %}selected{% endif %}>Newest First</option>
+                        <option value="old" {% if sort=='old' %}selected{% endif %}>Oldest First</option>
+                        <option value="price_asc" {% if sort=='price_asc' %}selected{% endif %}>Price Low to High</option>
+                        <option value="price_desc" {% if sort=='price_desc' %}selected{% endif %}>Price High to Low</option>
+                        <option value="views_desc" {% if sort=='views_desc' %}selected{% endif %}>Most Viewed</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="row">
         {% if listings %}
             {% for ad in listings %}
-            <div class="col-md-6 mb-3">
-                    <div class="card position-relative" style="cursor:pointer;">
+            <div class="col-12 col-md-6 mb-3">
+                    <div class="card position-relative listing-card" data-href="{{ url_for('view_listing', listing_id=ad.id) }}">
                         <div class="row g-0">
                             <div class="col-4">
                                 {% set img = (ad.photos.split(',')[0] if ad.photos else '') %}
                                 {% if img %}
-                                    <img src="{{ img|imgurl }}" class="img-fluid rounded-start" alt="{{ ad.title }}">
+                                    <div class="position-relative">
+                                        <img src="{{ img|imgurl }}" class="img-fluid rounded-start" alt="{{ ad.title }}">
+                                        {% if ad.status == 'sold' or ad.approval_status == 'sold' %}
+                                            <span class="position-absolute top-0 start-0 badge bg-secondary m-2">SOLD</span>
+                                        {% endif %}
+                                        {% if ad.boosted %}
+                                            <span class="position-absolute top-0 end-0 badge bg-warning text-dark m-2">Boosted</span>
+                                        {% endif %}
+                                    </div>
                                 {% else %}
                                     <img src="/static/css/placeholder.png" class="img-fluid rounded-start" alt="No image">
                                 {% endif %}
@@ -22,8 +67,9 @@
                             <div class="col-8">
                                 <div class="card-body">
                                     <h5 class="card-title mb-1">{{ ad.title }}</h5>
-                                    <p class="card-text">₹{{ ad.price }}</p>
-                                    <p class="card-text"><small class="text-muted">{{ ad.category }} · {{ ad.subcategory }}</small></p>
+                                    <p class="card-text mb-1"><strong>₹{{ ad.price }}</strong></p>
+                                    <p class="card-text mb-1"><small class="text-muted">{{ ad.category }} · {{ ad.subcategory }}</small></p>
+                                    <p class="card-text mb-1"><small class="text-muted">{{ ad.location or 'India' }} · {{ ad.created_at.strftime('%d %b %Y') if ad.created_at else '' }}</small></p>
                                     <p class="card-text">
                                         {% if ad.approval_status == 'pending' %}
                                             <span class="badge bg-warning text-dark">Pending</span>
@@ -37,8 +83,15 @@
                                             <span class="badge bg-secondary">{{ ad.approval_status }}</span>
                                         {% endif %}
                                     </p>
+                                    <div class="d-flex text-muted small">
+                                        <div class="me-3"><i class="fas fa-eye"></i> {{ ad.view_count or 0 }}</div>
+                                        <div class="me-3"><i class="fas fa-heart"></i> {{ ad.favorites_count or 0 }}</div>
+                                        <div><i class="fas fa-clock"></i> {{ ad.days_active or 0 }} days</div>
+                                    </div>
+                                    <a href="{{ url_for('view_listing', listing_id=ad.id) }}" class="stretched-link"></a>
+                                </div>
+                                <div class="card-footer bg-white border-0 pt-0">
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Actions">
-                                    <a href="{{ url_for('view_listing', listing_id=ad.id) }}" class="btn btn-primary">View Listing</a>
                                         <a href="/edit-product/{{ ad.id }}" class="btn btn-outline-secondary">Edit</a>
                                         <a href="/promotion/{{ ad.id }}" class="btn btn-outline-warning">Promote</a>
                                         <a href="/mark-sold/{{ ad.id }}" class="btn btn-outline-success" onclick="return confirm('Mark this item as sold?');">Mark as Sold</a>
@@ -52,10 +105,58 @@
             {% endfor %}
         {% else %}
             <div class="col-12">
-                <p>You have no ads yet. <a href="{{ url_for('post_ad_form') }}">Post your first ad</a>.</p>
+                <div class="text-center p-5">
+                    <div class="mb-3"><i class="fas fa-inbox fa-2x text-muted"></i></div>
+                    <p class="text-muted mb-3">You haven't posted any ads yet.</p>
+                    <a href="{{ url_for('post_ad_form') }}" class="btn btn-primary"><i class="fas fa-plus-circle"></i> Post Your First Ad</a>
+                </div>
             </div>
         {% endif %}
     </div>
+    {% if total_pages and total_pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-3">
+        <ul class="pagination justify-content-center">
+            {% if current_page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('my_listings', page=1, status=status_filter, q=q, sort=sort) }}">First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('my_listings', page=current_page-1, status=status_filter, q=q, sort=sort) }}">Previous</a>
+            </li>
+            {% endif %}
+            {% for page_num in range(1, total_pages + 1) %}
+                {% if page_num == current_page %}
+                    <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                {% elif page_num >= current_page - 2 and page_num <= current_page + 2 %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('my_listings', page=page_num, status=status_filter, q=q, sort=sort) }}">{{ page_num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if current_page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('my_listings', page=current_page+1, status=status_filter, q=q, sort=sort) }}">Next</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('my_listings', page=total_pages, status=status_filter, q=q, sort=sort) }}">Last</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
 </div>
-<!-- No additional JS required; <a> wraps the card to guarantee navigation -->
+<style>
+.listing-card { transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
+.listing-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.listing-card').forEach(function(card) {
+    const href = card.getAttribute('data-href');
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('.btn-group')) return;
+      if (href) window.location.href = href;
+    });
+  });
+});
+</script>
+<!-- Cards clickable via stretched-link and JS; buttons in footer prevent accidental navigation -->
 {% endblock %}

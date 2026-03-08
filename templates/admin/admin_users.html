@@ -11,18 +11,10 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3">
-            <div class="col-md-6">
+            <div class="col-md-8">
                 <input type="text" class="form-control" name="search" placeholder="Search by email or username" value="{{ search or '' }}">
             </div>
             <div class="col-md-4">
-                <select class="form-select" name="role">
-                    <option value="">All Roles</option>
-                    <option value="buyer" {% if role_filter == 'buyer' %}selected{% endif %}>Buyers</option>
-                    <option value="seller" {% if role_filter == 'seller' %}selected{% endif %}>Sellers</option>
-                    <option value="blocked" {% if role_filter == 'blocked' %}selected{% endif %}>Blocked</option>
-                </select>
-            </div>
-            <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Filter</button>
             </div>
         </form>
@@ -32,7 +24,7 @@
 <!-- Users Table -->
 <div class="card">
     <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="fas fa-table"></i> Users ({{ total }})</h5>
+        <h5 class="mb-0"><i class="fas fa-table"></i> Users ({{ total|default(users|length) }})</h5>
     </div>
     <div class="card-body p-0">
         {% if users %}
@@ -44,9 +36,8 @@
                             <th>Username</th>
                             <th>Email</th>
                             <th>Phone</th>
-                            <th>Role</th>
-                        <th>Package</th>
-                        <th>Fee</th>
+                            <th>Listings Count</th>
+                            <th>Status</th>
                             <th>Joined</th>
                             <th class="text-center">Actions</th>
                         </tr>
@@ -58,19 +49,14 @@
                                 <td><strong>{{ user.username }}</strong></td>
                                 <td>{{ user.email }}</td>
                                 <td>{{ user.phone or 'N/A' }}</td>
+                                <td>{{ user.listings_count | default(0) }}</td>
                                 <td>
-                                    {% if user.role == 'buyer' %}
-                                        <span class="badge bg-info">Buyer</span>
-                                    {% elif user.role == 'seller' %}
-                                        <span class="badge bg-success">Seller</span>
-                                    {% elif user.role == 'blocked' %}
+                                    {% if user.role == 'blocked' %}
                                         <span class="badge bg-danger">Blocked</span>
                                     {% else %}
-                                        <span class="badge bg-secondary">{{ user.role }}</span>
+                                        <span class="badge bg-success">Active</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ user.seller_package or '-' }}</td>
-                                <td>{% if user.registration_fee %}₹{{ user.registration_fee }}{% else %}-{% endif %}</td>
                                 <td><small>{{ user.created_at.strftime('%Y-%m-%d') }}</small></td>
                                 <td class="text-center">
                                     <a href="{{ url_for('admin.view_user', user_id=user.id) }}" 
@@ -133,36 +119,36 @@
 </div>
 
 <!-- Pagination -->
-{% if total_pages > 1 %}
+{% if total_pages|default(0) > 1 %}
     <nav aria-label="Page navigation" class="mt-4">
         <ul class="pagination justify-content-center">
-            {% if current_page > 1 %}
+            {% if (current_page|default(1)) > 1 %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('admin.manage_users', page=1, search=search, role=role_filter) }}">First</a>
+                    <a class="page-link" href="{{ url_for('admin.manage_users', page=1, search=search) }}">First</a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('admin.manage_users', page=current_page-1, search=search, role=role_filter) }}">Previous</a>
+                    <a class="page-link" href="{{ url_for('admin.manage_users', page=(current_page|default(2))-1, search=search) }}">Previous</a>
                 </li>
             {% endif %}
 
-            {% for page_num in range(1, total_pages + 1) %}
-                {% if page_num == current_page %}
+            {% for page_num in range(1, (total_pages|default(1)) + 1) %}
+                {% if page_num == (current_page|default(1)) %}
                     <li class="page-item active">
                         <span class="page-link">{{ page_num }}</span>
                     </li>
-                {% elif page_num >= current_page - 2 and page_num <= current_page + 2 %}
+                {% elif page_num >= (current_page|default(1)) - 2 and page_num <= (current_page|default(1)) + 2 %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('admin.manage_users', page=page_num, search=search, role=role_filter) }}">{{ page_num }}</a>
+                        <a class="page-link" href="{{ url_for('admin.manage_users', page=page_num, search=search) }}">{{ page_num }}</a>
                     </li>
                 {% endif %}
             {% endfor %}
 
-            {% if current_page < total_pages %}
+            {% if (current_page|default(1)) < (total_pages|default(1)) %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('admin.manage_users', page=current_page+1, search=search, role=role_filter) }}">Next</a>
+                    <a class="page-link" href="{{ url_for('admin.manage_users', page=(current_page|default(1))+1, search=search) }}">Next</a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('admin.manage_users', page=total_pages, search=search, role=role_filter) }}">Last</a>
+                    <a class="page-link" href="{{ url_for('admin.manage_users', page=(total_pages|default(1)), search=search) }}">Last</a>
                 </li>
             {% endif %}
         </ul>
