@@ -164,8 +164,8 @@ def manage_users():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Build query with filters
-        query = "SELECT id, username, email, role, phone, created_at, seller_package, registration_fee FROM users WHERE role != 'admin'"
+        # Build query with filters (only columns guaranteed to exist)
+        query = "SELECT id, username, email, role, phone, created_at FROM users WHERE role != 'admin'"
         params = []
 
         if search:
@@ -227,10 +227,9 @@ def view_user(user_id):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get user details
+        # Get user details (skip optional columns that may not exist in this schema)
         cursor.execute("""
-            SELECT id, username, email, phone, role, created_at, warning_count, suspension_reason,
-                   seller_package, registration_fee
+            SELECT id, username, email, phone, role, created_at, warning_count, suspension_reason
             FROM users WHERE id = %s
         """, (user_id,))
         user = cursor.fetchone()

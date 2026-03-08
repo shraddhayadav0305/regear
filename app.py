@@ -3,7 +3,7 @@ import mysql.connector
 from mysql.connector import Error as MySQLError
 import hashlib
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 import secrets
 import os
 from werkzeug.utils import secure_filename
@@ -120,31 +120,18 @@ PACKAGE_FEES = {
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
-        role = request.form.get("role", "buyer")
-        username = request.form.get("username")
-        email = request.form.get("email")
-        password = request.form.get("password")
-        phone = request.form.get("phone")
+        full_name = (request.form.get("full_name") or "").strip()
+        email = (request.form.get("email") or "").strip().lower()
+        phone = (request.form.get("phone") or "").strip()
+        password = request.form.get("password") or ""
+        confirm_password = request.form.get("password_confirm") or request.form.get("confirm_password")
 
-        # additional seller fields
-        seller_package = None
-        registration_fee = None
-        if role == "seller":
-            # normalize package value coming from the form
-            seller_package = request.form.get("package")
-            if seller_package:
-                seller_package = seller_package.strip()
-            # validate package selection
-            if not seller_package or str(seller_package) not in PACKAGE_FEES:
-                flash("❌ Please select a valid seller package", "error")
-                return redirect(url_for("register"))
-            # store fee as numeric
-            registration_fee = float(PACKAGE_FEES.get(str(seller_package)))
-
-        if not username or not email or not password:
+        if not full_name or not email or not phone or not password or not confirm_password:
             flash("❌ All fields are required", "error")
             return redirect(url_for("register"))
-
+        if password != confirm_password:
+            flash("❌ Passwords do not match", "error")
+            return redirect(url_for("register"))
         if len(password) < 6:
             flash("❌ Password must be at least 6 characters", "error")
             return redirect(url_for("register"))
@@ -152,36 +139,41 @@ def register():
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-
-            # check email
             cursor.execute("SELECT id FROM users WHERE email=%s", (email,))
             if cursor.fetchone():
                 flash("❌ Email already registered", "error")
+                cursor.close()
+                conn.close()
                 return redirect(url_for("register"))
-
+            try:
+                cursor.execute("SELECT id FROM users WHERE phone=%s", (phone,))
+                if cursor.fetchone():
+                    flash("❌ Phone number already registered", "error")
+                    cursor.close()
+                    conn.close()
+                    return redirect(url_for("register"))
+            except Exception:
+                pass
             hashed_password = hash_password(password)
-
-            cursor.execute("""
-                INSERT INTO users (role, username, email, password, phone, created_at, seller_package, registration_fee)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                role, username, email, hashed_password, phone, datetime.now(),
-                seller_package, registration_fee
-            ))
-
+            try:
+                cursor.execute("""
+                    INSERT INTO users (username, email, phone, password, role, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (full_name, email, phone, hashed_password, 'buyer', datetime.now()))
+            except Exception:
+                cursor.execute("""
+                    INSERT INTO users (username, email, phone, password, created_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (full_name, email, phone, hashed_password, datetime.now()))
             conn.commit()
             cursor.close()
             conn.close()
-
             flash("✅ Registration successful. Please login.", "success")
             return redirect(url_for("login"))
-
         except Exception as e:
             flash(f"❌ Error: {str(e)}", "error")
             return redirect(url_for("register"))
-
-    # send package mapping for sellers so template can build options
-    return render_template("register.html", package_fees=PACKAGE_FEES)
+    return render_template("register_unified.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -549,10 +541,14 @@ def post_ad_form():
                 flash("❌ All required fields must be filled (title, category, price, condition, description)", "error")
                 return redirect(url_for("post_ad_form"))
 
-            # Handle photo uploads - require at least one image
+            # Handle photo uploads - require at least one image (max 8)
             uploaded_files = request.files.getlist('photos')
-            if not uploaded_files or len([f for f in uploaded_files if f and f.filename]) == 0:
+            valid_files = [f for f in uploaded_files if f and f.filename]
+            if not valid_files:
                 flash("❌ Please upload at least one image (JPG/PNG)", "error")
+                return redirect(url_for("post_ad_form"))
+            if len(valid_files) > 8:
+                flash("❌ You can upload up to 8 images only", "error")
                 return redirect(url_for("post_ad_form"))
 
             saved_paths = []
@@ -580,7 +576,7 @@ def post_ad_form():
                 except Exception:
                     pass
 
-            for f in uploaded_files:
+            for f in valid_files:
                 if f and f.filename:
                     if not allowed_file(f.filename):
                         flash("❌ Only JPG/JPEG/PNG images are allowed", "error")
@@ -597,11 +593,12 @@ def post_ad_form():
 
             photos_str = ','.join(saved_paths)
 
-            # Insert listing with pending approval
+            # Insert listing with pending approval and 5-day free trial visibility
+            trial_expires = datetime.now() + timedelta(days=5)
             cursor.execute("""
-                INSERT INTO listings (user_id, category, subcategory, title, description, price, location, phone, email, item_condition, photos, created_at, status, approval_status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (user_id, category, subcategory, title, description, price, location, phone, email, condition, photos_str, datetime.now(), 'active', 'pending'))
+                INSERT INTO listings (user_id, category, subcategory, title, description, price, location, phone, email, item_condition, photos, created_at, status, approval_status, expires_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, category, subcategory, title, description, price, location, phone, email, condition, photos_str, datetime.now(), 'active', 'pending', trial_expires))
 
             conn.commit()
             listing_id = cursor.lastrowid
@@ -1003,6 +1000,28 @@ def imgurl(path):
         return url_for('static', filename=p)
     except Exception:
         return ''
+
+@app.route("/tasks/expire-listings")
+def task_expire_listings():
+    """Mark listings expired when free trial or boost expires.
+    Safe to call manually or via scheduler."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE listings
+            SET status='expired'
+            WHERE (expires_date IS NOT NULL AND expires_date < NOW())
+              AND (status='active' OR status IS NULL)
+              AND (COALESCE(is_sold, 0)=0)
+        """)
+        affected = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "expired": affected})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route("/seller/<int:user_id>")
 def seller_profile(user_id):
