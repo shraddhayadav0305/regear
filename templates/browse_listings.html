@@ -468,7 +468,7 @@
                              data-location="{{ listing.location or '' }}">
                             <div class="listing-image">
                                 {% if listing.photos %}
-                                    <img src="{{ listing.photos.split(',')[0] }}" alt="{{ listing.title }}">
+                                    <img src="{{ listing.photos.split(',')[0] | imgurl }}" alt="{{ listing.title }}">
                                 {% else %}
                                     <div class="no-image">
                                         <i class="fas fa-image"></i>

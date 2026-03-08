@@ -403,19 +403,19 @@ def get_categories():
         "Mobile Phones": "/static/images/mobile phones.png",  # custom mobile phone image
         "Laptops & Computers": "/static/images/lap.png",  # custom laptop image
         "Cameras & DSLR": "/static/images/dslr-camera-logo-design-png.png",  # User's camera image
-        "TVs & Home Entertainment": create_svg_placeholder("📺 TVs & Home", "#22543d"),
+        "TVs & Home Entertainment": "/static/images/tv and ho.png",
         "Gaming Consoles": "/static/images/gaming console.png",  # user image for gaming consoles
-        "Speakers & Headphones": create_svg_placeholder("🔊 Audio", "#6b2c2c"),
+        "Speakers & Headphones": "/static/images/speakers and headphones.jpg",
         "Computer Accessories": "/static/images/computer accessories.png",  # User's computer accessories image
         # if user supplies a custom image, serve the file; otherwise fall back to SVG placeholder
         "Electronic Components": "/static/images/electronic component.jpg",  # custom image placed by user
-        "Tablets": create_svg_placeholder("📱 Tablets", "#c53030"),
-        "Smart Watches": create_svg_placeholder("⌚ Watches", "#97266d"),
-        "Printers & Scanners": create_svg_placeholder("🖨️ Printers", "#2d3748"),
+        "Tablets": "/static/images/tablets.webp",
+        "Smart Watches": "/static/images/smart watches.jpg",
+        "Printers & Scanners": "/static/images/printers and moniters.png",
         "Monitors & Displays": "/static/images/Monitors & Displays.webp",  # custom monitors image
-        "Smart Home Devices": create_svg_placeholder("🏠 Smart Home", "#354e78"),
-        "Networking Devices": create_svg_placeholder("🌐 Network", "#6b3517"),
-        "Storage Devices": create_svg_placeholder("💾 Storage", "#c53b3b")
+        "Smart Home Devices": "/static/images/Smart-Home-Device-Smart-Device.png",
+        "Networking Devices": "/static/images/Screenshot 2026-02-22 193118.png",
+        "Storage Devices": "/static/images/storage device.webp"
     }
     
     try:
@@ -991,6 +991,18 @@ def inject_wishlist_count():
     wl = session.get('wishlist', [])
     return {'wishlist_count': len(wl)}
 
+@app.template_filter('imgurl')
+def imgurl(path):
+    try:
+        from flask import url_for
+        if not path:
+            return ''
+        p = str(path).strip().lstrip('/\\')
+        if p.lower().startswith('static/'):
+            p = p[7:]
+        return url_for('static', filename=p)
+    except Exception:
+        return ''
 
 @app.route("/seller/<int:user_id>")
 def seller_profile(user_id):

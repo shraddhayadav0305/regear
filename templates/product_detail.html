@@ -427,7 +427,7 @@
                     <div class="product-gallery">
                         {% set img = (listing.photos.split(',')[0] if listing.photos else '') %}
                         {% if img %}
-                            <img id="mainImage" src="/{{ img }}" alt="{{ listing.title }}">
+                            <img id="mainImage" src="{{ img|imgurl }}" alt="{{ listing.title }}">
                         {% else %}
                             <div class="product-gallery-placeholder">
                                 <i class="fas fa-image"></i>
@@ -440,7 +440,7 @@
                         <div class="thumbnail-container">
                             {% set photo_list = listing.photos.split(',') %}
                             {% for photo in photo_list %}
-                                <img src="/{{ photo }}" alt="Thumbnail" class="thumbnail {% if loop.first %}active{% endif %}" onclick="changeImage(this)">
+                                <img src="{{ photo|imgurl }}" alt="Thumbnail" class="thumbnail {% if loop.first %}active{% endif %}" onclick="changeImage(this)">
                             {% endfor %}
                         </div>
                     {% endif %}
