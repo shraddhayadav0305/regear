@@ -83,19 +83,33 @@
                                             <span class="badge bg-secondary">{{ ad.approval_status }}</span>
                                         {% endif %}
                                     </p>
-                                    <div class="d-flex text-muted small">
-                                        <div class="me-3"><i class="fas fa-eye"></i> {{ ad.view_count or 0 }}</div>
-                                        <div class="me-3"><i class="fas fa-heart"></i> {{ ad.favorites_count or 0 }}</div>
-                                        <div><i class="fas fa-clock"></i> {{ ad.days_active or 0 }} days</div>
+                                    <div class="d-flex text-muted small mb-1">
+                                        <div class="me-3"><i class="fas fa-eye"></i> {{ ad.view_count | default(0) }}</div>
+                                        <div class="me-3"><i class="fas fa-heart"></i> {{ ad.favorites_count | default(0) }}</div>
+                                        <div class="me-3"><i class="fas fa-comments"></i> {{ ad.messages_count | default(0) }}</div>
+                                        <div><i class="fas fa-clock"></i> {{ ad.days_active | default(0) }} days</div>
                                     </div>
-                                    <a href="{{ url_for('view_listing', listing_id=ad.id) }}" class="stretched-link"></a>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ ad.performance_percent | default(0) }}%;" aria-valuenow="{{ ad.performance_percent | default(0) }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    {% if ad.boosted and ad.boost_expires %}
+                                        <small class="text-success d-block mt-1">Boosted until: {{ ad.boost_expires.strftime('%d %b %Y') if ad.boost_expires else '' }}</small>
+                                    {% endif %}
+                                    {% if ad.days_remaining is not none %}
+                                        <small class="text-muted">⏱ {{ ad.days_remaining }} days remaining</small>
+                                    {% endif %}
                                 </div>
                                 <div class="card-footer bg-white border-0 pt-0">
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Actions">
                                         <a href="/edit-product/{{ ad.id }}" class="btn btn-outline-secondary">Edit</a>
-                                        <a href="/promotion/{{ ad.id }}" class="btn btn-outline-warning">Promote</a>
+                                        <a href="{{ url_for('boost_listing', listing_id=ad.id) }}" class="btn btn-outline-warning">Boost</a>
                                         <a href="/mark-sold/{{ ad.id }}" class="btn btn-outline-success" onclick="return confirm('Mark this item as sold?');">Mark as Sold</a>
                                         <a href="/delete-product/{{ ad.id }}" class="btn btn-outline-danger" onclick="return confirm('Delete this listing?');">Delete</a>
+                                        {% if ad.days_remaining is not none and ad.days_remaining == 0 %}
+                                        <form method="POST" action="{{ url_for('renew_listing', product_id=ad.id) }}" style="display:inline;">
+                                            <button type="submit" class="btn btn-outline-primary" onclick="return confirm('Renew this listing for 30 days?');">Renew</button>
+                                        </form>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -154,6 +168,14 @@ document.addEventListener('DOMContentLoaded', function () {
     card.addEventListener('click', function(e) {
       if (e.target.closest('.btn-group')) return;
       if (href) window.location.href = href;
+    });
+  });
+  // Ensure button clicks always navigate and don't get swallowed by card handler
+  document.querySelectorAll('.listing-card .btn-group a').forEach(function(link) {
+    link.addEventListener('click', function(e) {
+      e.stopPropagation();
+      // allow default navigation; for safety, force navigate
+      if (this.href) window.location.href = this.href;
     });
   });
 });

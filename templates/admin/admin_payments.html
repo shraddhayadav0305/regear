@@ -101,6 +101,8 @@
                 <th><i class="fas fa-percent"></i> GST</th>
                 <th><i class="fas fa-sum"></i> Total</th>
                 <th><i class="fas fa-credit-card"></i> Method</th>
+                <th><i class="fas fa-bullhorn"></i> Promotion Status</th>
+                <th><i class="fas fa-list"></i> Listing Status</th>
                 <th><i class="fas fa-calendar"></i> Date</th>
                 <th><i class="fas fa-check"></i> Status</th>
             </tr>
@@ -132,6 +134,25 @@
                         } %}
                         <i class="{{ method_icons.get(payment.payment_method, 'fas fa-money-bill') }}"></i> 
                         {{ payment.payment_method|replace('_', ' ')|title }}
+                    </td>
+                    <td>
+                        {% set promo = payment.promotion_status or '' %}
+                        {% if promo == 'active' %}
+                        <span class="badge bg-success">Active</span>
+                        {% elif promo == 'expired' %}
+                        <span class="badge bg-secondary">Expired</span>
+                        {% elif promo == 'cancelled' %}
+                        <span class="badge bg-warning text-dark">Cancelled</span>
+                        {% else %}
+                        <span class="badge bg-light text-dark">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if payment.listing_status %}
+                        <span class="badge bg-light text-dark">{{ payment.listing_status|capitalize }}</span>
+                        {% else %}
+                        <span class="badge bg-danger">Deleted</span>
+                        {% endif %}
                     </td>
                     <td>{{ payment.paid_at.strftime('%d %b %Y, %I:%M %p') if payment.paid_at else 'N/A' }}</td>
                     <td>

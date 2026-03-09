@@ -80,6 +80,17 @@
             align-items: center;
             justify-content: center;
         }
+        .listing-badge-top {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #ff9800;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
 
         .product-gallery img {
             width: 100%;
@@ -425,6 +436,11 @@
                 <!-- Product Gallery -->
                 <div class="product-detail-container p-0 mb-4">
                     <div class="product-gallery">
+                        {% if listing.is_boosted %}
+                        <div class="listing-badge-top">
+                            BOOSTED
+                        </div>
+                        {% endif %}
                         {% set img = (listing.photos.split(',')[0] if listing.photos else '') %}
                         {% if img %}
                             <img id="mainImage" src="{{ img|imgurl }}" alt="{{ listing.title }}">
@@ -504,6 +520,11 @@
                     </div>
                 </div>
                 <div class="price-note">Fixed Price</div>
+                    {% if listing.is_boosted and listing.boost_expiry %}
+                    <div class="mt-2 text-success">
+                        Boosted until {{ listing.boost_expiry.strftime('%d %b %Y') if listing.boost_expiry else '' }}
+                    </div>
+                    {% endif %}
                     
                     <div class="detail-row">
                         <span class="detail-label"><i class="fas fa-map-marker-alt"></i> Location:</span>
@@ -523,7 +544,13 @@
                 <div class="seller-card">
                     <a href="/seller/{{ listing.user_id }}" class="text-decoration-none text-dark">
                         <div class="seller-header">
-                            <div class="seller-avatar">{{ listing.username[0].upper() }}</div>
+                            <div class="seller-avatar" style="overflow:hidden;">
+                                {% if listing.seller_photo %}
+                                  <img src="{{ listing.seller_photo|imgurl }}" alt="{{ listing.username }}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;">
+                                {% else %}
+                                  {{ listing.username[0].upper() }}
+                                {% endif %}
+                            </div>
                             <div class="seller-info">
                                 <p class="small text-muted mb-1">Posted by</p>
                                 <h5 class="d-inline">{{ listing.username }}</h5>

@@ -5,8 +5,56 @@
 {% block content %}
 <div class="admin-header mb-4">
     <div>
-        <h1 class="mb-2">Platform Insights</h1>
-        <p class="text-muted">Smart analytics and business intelligence dashboard</p>
+        <h1 class="mb-2">Analytics & Insights</h1>
+        <p class="text-muted">Real-time marketplace analytics powered by live data</p>
+    </div>
+</div>
+
+<!-- PLATFORM OVERVIEW -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-2">
+        <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <small class="text-muted">Total Users</small>
+            <h4 class="mb-0">{{ insights.kpis.total_users|default(0) }}</h4>
+            <small class="text-success">+{{ insights.kpis.new_users_week|default(0) }} this week</small>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <small class="text-muted">Total Listings</small>
+            <h4 class="mb-0">{{ insights.kpis.total_listings|default(0) }}</h4>
+            <small class="text-muted">All-time</small>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <small class="text-muted">Active Listings</small>
+            <h4 class="mb-0">{{ insights.kpis.active_listings|default(0) }}</h4>
+            <small class="text-muted">Live</small>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <small class="text-muted">Boosted Ads</small>
+            <h4 class="mb-0">{{ insights.kpis.boosted_ads|default(0) }}</h4>
+            <small class="text-muted">Active</small>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <small class="text-muted">Total Revenue</small>
+            <h4 class="mb-0">₹{{ insights.kpis.total_revenue|default(0) }}</h4>
+            <small class="text-success">{{ insights.revenue_growth_pct|default(0) }}% MoM</small>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <small class="text-muted">New Users (7d)</small>
+            <h4 class="mb-0">{{ insights.kpis.new_users_week|default(0) }}</h4>
+            <small class="{% if insights.kpis.new_users_week_delta|default(0) >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {% if insights.kpis.new_users_week_delta|default(0) >= 0 %}+{% endif %}{{ insights.kpis.new_users_week_delta|default(0) }} vs prev
+            </small>
+        </div>
     </div>
 </div>
 
@@ -147,12 +195,77 @@
     </div>
 </div>
 
+<!-- REVENUE + LISTINGS ANALYTICS -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card" style="border-radius:12px; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <div class="card-body p-4">
+        <h6 class="mb-3"><i class="fas fa-chart-line" style="color:#3b82f6;"></i> Monthly Revenue</h6>
+        <canvas id="revenueChart" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card" style="border-radius:12px; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <div class="card-body p-4">
+        <h6 class="mb-3"><i class="fas fa-plus-square" style="color:#10b981;"></i> Listings Created (Last 14 days)</h6>
+        <canvas id="listingsDailyChart" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ACTIVE VS SOLD + LISTINGS BY CATEGORY -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-4">
+    <div class="card" style="border-radius:12px; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <div class="card-body p-4">
+        <h6 class="mb-3"><i class="fas fa-tags" style="color:#f59e0b;"></i> Active vs Sold</h6>
+        <canvas id="activeSoldChart" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card" style="border-radius:12px; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <div class="card-body p-4">
+        <h6 class="mb-3"><i class="fas fa-chart-bar" style="color:#10b981;"></i> Top 10 Categories by Listings</h6>
+        <canvas id="categoryPerformanceChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- USER GROWTH -->
+<div class="card mb-4" style="border-radius:12px; border:none; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+  <div class="card-body p-4">
+    <h6 class="mb-3"><i class="fas fa-user-plus" style="color:#8b5cf6;"></i> User Growth (Last 14 days)</h6>
+    <canvas id="userGrowthChart" height="120"></canvas>
+  </div>
+ </div>
+
 <!-- CATEGORY PERFORMANCE COMPARISON -->
 <div class="card mb-4" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
     <div class="card-body p-4">
-        <h6 class="mb-3"><i class="fas fa-chart-bar" style="color: #10b981;"></i> Top 10 Categories by Listings</h6>
-        <div style="max-height: 300px;">
-            <canvas id="categoryPerformanceChart"></canvas>
+        <h6 class="mb-3"><i class="fas fa-bullhorn" style="color:#ef4444;"></i> Boosted Ads Performance</h6>
+        <div class="row">
+          <div class="col-md-4">
+            <div class="p-3">
+              <small class="text-muted d-block">Total Boosted</small>
+              <h4 class="mb-0">{{ insights.boosts_total|default(0) }}</h4>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="p-3">
+              <small class="text-muted d-block">Boost Revenue</small>
+              <h4 class="mb-0">₹{{ insights.boosts_revenue|default(0) }}</h4>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="p-3">
+              <small class="text-muted d-block">Boost Usage</small>
+              <h4 class="mb-0">{{ insights.boost_usage_pct|default(0) }}%</h4>
+            </div>
+          </div>
         </div>
     </div>
 </div>
@@ -213,6 +326,54 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
+    // Revenue chart
+    const revCtx = document.getElementById('revenueChart').getContext('2d');
+    new Chart(revCtx, {
+      type: 'line',
+      data: {
+        labels: {{ insights.revenue_month_labels|default([])|tojson|safe }},
+        datasets: [{
+          label: 'Revenue (₹)',
+          data: {{ insights.revenue_month_totals|default([])|tojson|safe }},
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,0.2)',
+          tension: 0.35,
+          fill: true
+        }]
+      },
+      options: { responsive:true, plugins:{ legend:{ display:false } } }
+    });
+
+    // Listings daily
+    const lstCtx = document.getElementById('listingsDailyChart').getContext('2d');
+    new Chart(lstCtx, {
+      type: 'bar',
+      data: {
+        labels: {{ insights.listings_day_labels|default([])|tojson|safe }},
+        datasets: [{
+          label: 'Listings',
+          data: {{ insights.listings_day_counts|default([])|tojson|safe }},
+          backgroundColor: 'rgba(16,185,129,0.7)',
+          borderRadius: 8
+        }]
+      },
+      options: { responsive:true, plugins:{ legend:{ display:false } } }
+    });
+
+    // Active vs Sold
+    const asCtx = document.getElementById('activeSoldChart').getContext('2d');
+    new Chart(asCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Active','Sold'],
+        datasets: [{
+          data: {{ insights.active_vs_sold|default([0,0])|tojson|safe }},
+          backgroundColor: ['#22c55e','#f59e0b']
+        }]
+      },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom' } } }
+    });
+
     // Subscription Mix Chart
     const mixCtx = document.getElementById('subscriptionMixChart').getContext('2d');
     const mixChart = new Chart(mixCtx, {
@@ -246,9 +407,9 @@
         }
     });
 
-    // Category Performance Chart
+    // Category Performance Chart (Top 10)
     const categoryCtx = document.getElementById('categoryPerformanceChart').getContext('2d');
-    const categoryChart = new Chart(categoryCtx, {
+    new Chart(categoryCtx, {
         type: 'bar',
         data: {
             labels: {{ insights.category_labels|default([])|tojson|safe }},
@@ -285,6 +446,24 @@
                 }
             }
         }
+    });
+
+    // User growth chart
+    const userCtx = document.getElementById('userGrowthChart').getContext('2d');
+    new Chart(userCtx, {
+      type: 'line',
+      data: {
+        labels: {{ insights.user_day_labels|default([])|tojson|safe }},
+        datasets: [{
+          label: 'Registrations',
+          data: {{ insights.user_day_counts|default([])|tojson|safe }},
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139,92,246,0.2)',
+          tension: 0.35,
+          fill: true
+        }]
+      },
+      options: { responsive:true, plugins:{ legend:{ display:false } } }
     });
 </script>
 {% endblock %}

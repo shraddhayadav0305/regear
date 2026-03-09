@@ -44,14 +44,7 @@
             padding: 0 20px;
         }
 
-        .header-section {
-            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
-            color: white;
-            border-radius: 12px;
-            padding: 40px;
-            margin-bottom: 40px;
-            text-align: center;
-        }
+        .header-section {background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; border-radius: 12px; padding: 40px; margin-bottom: 40px; text-align: center;}
 
         .header-section h1 {
             font-size: 2rem;
@@ -361,10 +354,9 @@
     </nav>
 
     <div class="boost-container">
-        <!-- Header -->
         <div class="header-section">
-            <h1><i class="fas fa-rocket"></i> Boost Your Product</h1>
-            <p>Get more visibility and sell faster by boosting your listing</p>
+            <h1>Boost Your Ad 🚀</h1>
+            <p>Boost your ad to reach up to 5× more buyers and sell faster.</p>
         </div>
 
         <!-- Product Info -->
@@ -395,57 +387,37 @@
             {% endif %}
         {% endwith %}
 
-        <!-- Boost Packages -->
         <div class="packages-section">
             <h2 class="section-title">Choose Your Boost Package</h2>
-
             <div class="packages-grid">
-                {% for key, package in boost_packages.items() %}
-                <div class="package-card {% if key == 'featured' %}recommended{% endif %}">
+                {% for p in packages %}
+                <div class="package-card {% if p.key == 'featured' %}recommended{% endif %}">
                     <div class="package-icon">
-                        {% if key == 'basic' %}
-                            <i class="fas fa-arrow-up"></i>
-                        {% elif key == 'featured' %}
-                            <i class="fas fa-star"></i>
-                        {% elif key == 'premium' %}
-                            <i class="fas fa-crown"></i>
-                        {% else %}
-                            <i class="fas fa-billboard"></i>
+                        {% if p.key == 'basic' %}<i class="fas fa-arrow-up"></i>
+                        {% elif p.key == 'featured' %}<i class="fas fa-star"></i>
+                        {% elif p.key == 'premium' %}<i class="fas fa-crown"></i>
                         {% endif %}
                     </div>
-                    <div class="package-name">{{ package['name'] }}</div>
-                    <div class="package-price">₹ {{ "%.2f"|format(package['price']) }}</div>
-                    <div class="package-duration">{{ package['days'] }} days</div>
-
+                    <div class="package-name">{{ p.name }}</div>
+                    <div class="package-price">₹ {{ p.price | int }}</div>
+                    <div class="package-duration">{{ p.days }} days</div>
                     <ul class="package-features">
-                        {% if key == 'basic' %}
-                            <li><i class="fas fa-check"></i> Extend listing by 7 days</li>
-                            <li><i class="fas fa-check"></i> Boost visibility in search</li>
-                            <li><i class="fas fa-check"></i> One-time payment</li>
-                        {% elif key == 'featured' %}
-                            <li><i class="fas fa-check"></i> 14 days of high visibility</li>
-                            <li><i class="fas fa-check"></i> Featured badge displayed</li>
-                            <li><i class="fas fa-check"></i> Higher search ranking</li>
-                            <li><i class="fas fa-check"></i> Category highlight</li>
-                        {% elif key == 'premium' %}
-                            <li><i class="fas fa-check"></i> 30 days premium visibility</li>
-                            <li><i class="fas fa-check"></i> Premium seller badge</li>
-                            <li><i class="fas fa-check"></i> Top search placement</li>
-                            <li><i class="fas fa-check"></i> Homepage feature</li>
-                        {% else %}
-                            <li><i class="fas fa-check"></i> 30 days banner placement</li>
-                            <li><i class="fas fa-check"></i> Homepage featured spot</li>
-                            <li><i class="fas fa-check"></i> Premium badge</li>
-                            <li><i class="fas fa-check"></i> Priority in all searches</li>
+                        {% if p.key == 'basic' %}
+                            <li><i class="fas fa-check"></i> Boosted visibility in category search</li>
+                            <li><i class="fas fa-check"></i> Higher placement in search results</li>
+                            <li><i class="fas fa-check"></i> Increased buyer reach</li>
+                        {% elif p.key == 'featured' %}
+                            <li><i class="fas fa-check"></i> Featured badge on the ad</li>
+                            <li><i class="fas fa-check"></i> Appears in homepage featured section</li>
+                            <li><i class="fas fa-check"></i> Higher ranking in search results</li>
+                        {% elif p.key == 'premium' %}
+                            <li><i class="fas fa-check"></i> Top placement in search results</li>
+                            <li><i class="fas fa-check"></i> Homepage featured listing</li>
+                            <li><i class="fas fa-check"></i> Premium badge on ad</li>
+                            <li><i class="fas fa-check"></i> Maximum visibility</li>
                         {% endif %}
                     </ul>
-
-                    <form method="POST" style="margin: 0;">
-                        <input type="hidden" name="package" value="{{ key }}">
-                        <button type="submit" class="btn-select">
-                            Select Plan
-                        </button>
-                    </form>
+                    <a class="btn-select" href="{{ url_for('checkout', package_id=p.id, ad_id=listing.id) }}">Select Plan</a>
                 </div>
                 {% endfor %}
             </div>
@@ -461,51 +433,44 @@
                         <th>Basic</th>
                         <th>Featured</th>
                         <th>Premium</th>
-                        <th>Banner</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
                         <td><strong>Duration</strong></td>
+                        <td>3 days</td>
+                        <td>5 days</td>
                         <td>7 days</td>
-                        <td>14 days</td>
-                        <td>30 days</td>
-                        <td>30 days</td>
                     </tr>
                     <tr>
                         <td><strong>Search Visibility</strong></td>
                         <td><span class="feature-check">✓ Boosted</span></td>
                         <td><span class="feature-check">✓ High</span></td>
                         <td><span class="feature-check">✓ Top</span></td>
-                        <td><span class="feature-check">✓ Highest</span></td>
                     </tr>
                     <tr>
                         <td><strong>Featured Badge</strong></td>
-                        <td><span class="feature-cross">-</span></td>
-                        <td><span class="feature-check">✓</span></td>
-                        <td><span class="feature-check">✓</span></td>
-                        <td><span class="feature-check">✓</span></td>
+                        <td><span class="feature-cross">No</span></td>
+                        <td><span class="feature-check">Yes</span></td>
+                        <td><span class="feature-check">Yes</span></td>
                     </tr>
                     <tr>
                         <td><strong>Category Highlight</strong></td>
                         <td><span class="feature-cross">-</span></td>
                         <td><span class="feature-check">✓</span></td>
                         <td><span class="feature-check">✓</span></td>
-                        <td><span class="feature-check">✓</span></td>
                     </tr>
                     <tr>
                         <td><strong>Homepage Feature</strong></td>
-                        <td><span class="feature-cross">-</span></td>
-                        <td><span class="feature-cross">-</span></td>
-                        <td><span class="feature-check">✓</span></td>
-                        <td><span class="feature-check">✓ Banner</span></td>
+                        <td><span class="feature-cross">No</span></td>
+                        <td><span class="feature-check">Yes</span></td>
+                        <td><span class="feature-check">Yes</span></td>
                     </tr>
                     <tr>
                         <td><strong>Price</strong></td>
-                        <td><strong>₹ 5.00</strong></td>
-                        <td><strong>₹ 10.00</strong></td>
-                        <td><strong>₹ 20.00</strong></td>
-                        <td><strong>₹ 50.00</strong></td>
+                        <td><strong>₹ 49</strong></td>
+                        <td><strong>₹ 99</strong></td>
+                        <td><strong>₹ 199</strong></td>
                     </tr>
                 </tbody>
             </table>

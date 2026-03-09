@@ -313,6 +313,96 @@
         }
 
         /* NAVBAR PANELS */
+        .profile-trigger {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            position: relative;
+            padding: 6px 10px;
+            border-radius: 20px;
+            transition: background 0.2s ease;
+            color: #002f34;
+            text-decoration: none;
+        }
+        .profile-trigger:hover { background: #f0f5ff; }
+        .profile-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.95rem;
+            overflow: hidden;
+        }
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+            display: block;
+        }
+        .profile-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #002f34;
+        }
+        .profile-dropdown {
+            position: absolute;
+            right: 0;
+            top: 110%;
+            width: 280px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+            padding: 10px;
+            z-index: 2200;
+            transform-origin: top right;
+            transition: transform .15s ease, opacity .15s ease;
+        }
+        .profile-dropdown.hidden { display: none; }
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+        }
+        .profile-username {
+            font-weight: 700;
+            color: #002f34;
+        }
+        .profile-menu a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: #333;
+            text-decoration: none;
+            transition: background .15s ease;
+        }
+        .profile-menu a:hover { background: #f5f8ff; }
+        .profile-section {
+            padding: 8px 0;
+        }
+        .profile-divider {
+            height: 1px;
+            background: #eee;
+            margin: 6px 0;
+        }
+        .profile-lang {
+            padding: 8px 12px;
+        }
+        .profile-lang select {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
         .navbar-panel {
             position: fixed;
             right: 0;
@@ -975,9 +1065,14 @@
 <div class="top-nav">
     <div class="container">
         <div class="nav-links">
-            <a href="/login"><i class="fas fa-user"></i> Login</a>
-            <a href="/register"><i class="fas fa-user-plus"></i> Register</a>
-            <a href="feedback.html"><i class="fas fa-comment"></i> Help & Support</a>
+            {% if not is_authenticated %}
+            <a href="{{ url_for('login') }}"><i class="fas fa-user"></i> Login</a>
+            <a href="{{ url_for('register') }}"><i class="fas fa-user-plus"></i> Register</a>
+            {% else %}
+            <a href="{{ url_for('messages_list') }}"><i class="fas fa-comments"></i> Messages</a>
+            <a href="{{ url_for('favorites') }}"><i class="fas fa-heart"></i> Favorites</a>
+            {% endif %}
+            <a href="{{ url_for('help_page') }}"><i class="fas fa-comment"></i> Help & Support</a>
         </div>
     </div>
 </div>
@@ -985,7 +1080,7 @@
 <!-- MAIN NAVBAR -->
 <nav class="navbar navbar-expand-lg main-navbar sticky-top">
     <div class="container">
-        <a class="navbar-brand" href="homepg.html">
+        <a class="navbar-brand" href="{{ url_for('home') }}">
             <i class="fas fa-sync-alt"></i> ReGear
         </a>
 
@@ -1051,8 +1146,54 @@
                         <span class="navbar-icon-badge unread" id="chatBadge">0</span>
                     </button>
                 </li>
+                {% if is_authenticated %}
+                <li class="nav-item ms-2">
+                    <div class="profile-trigger" id="profileTrigger">
+                        <div class="profile-avatar">
+                            {% if current_user and current_user.photo %}
+                                <img src="{{ current_user.photo|imgurl }}" alt="profile">
+                            {% else %}
+                                {{ user_initial }}
+                            {% endif %}
+                        </div>
+                        <div class="profile-name d-none d-md-block">{{ username }}</div>
+                        <i class="fas fa-chevron-down d-none d-md-block" style="font-size:.8rem;"></i>
+                        <div class="profile-dropdown hidden" id="profileDropdown">
+                            <div class="profile-header">
+                                <div class="profile-avatar">
+                                    {% if current_user and current_user.photo %}
+                                        <img src="{{ current_user.photo|imgurl }}" alt="profile">
+                                    {% else %}
+                                        {{ user_initial }}
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <div class="profile-username">{{ username }}</div>
+                                </div>
+                            </div>
+                            <div class="profile-section profile-menu">
+                                <a href="{{ url_for('profile') }}"><i class="fas fa-user"></i> View Profile</a>
+                            </div>
+                            <div class="profile-divider"></div>
+                            <div class="profile-section profile-menu">
+                                <a href="{{ url_for('dashboard') }}"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                                <a href="{{ url_for('my_listings') }}"><i class="fas fa-list"></i> My Listings</a>
+                                <a href="{{ url_for('sell') }}"><i class="fas fa-plus-circle"></i> Post New Ad</a>
+                                <a href="{{ url_for('messages_list') }}"><i class="fas fa-comments"></i> Messages</a>
+                                <a href="{{ url_for('favorites') }}"><i class="fas fa-heart"></i> Favorites</a>
+                                <a href="{{ url_for('payments') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
+                            </div>
+                            <div class="profile-divider"></div>
+                            <div class="profile-section profile-menu">
+                                <a href="{{ url_for('profile') }}"><i class="fas fa-cog"></i> Settings</a>
+                                <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% endif %}
                 <li class="nav-item">
-                  <a href="/sell" class="sell-btn ms-3">
+                  <a href="{{ url_for('sell') }}" class="sell-btn ms-3">
                         <i class="fas fa-plus"></i> Sell
                     </a>
                 </li>
@@ -1576,6 +1717,30 @@
             closeSubcategoryModal();
         }
     });
+
+    const profileTrigger = document.getElementById('profileTrigger');
+    const profileDropdown = document.getElementById('profileDropdown');
+    if (profileTrigger) {
+        profileTrigger.addEventListener('click', function(e) {
+            e.stopPropagation();
+            profileDropdown.classList.toggle('hidden');
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#profileTrigger')) {
+                if (profileDropdown && !profileDropdown.classList.contains('hidden')) {
+                    profileDropdown.classList.add('hidden');
+                }
+            }
+        });
+        const lang = localStorage.getItem('regear_lang');
+        const sel = document.getElementById('languageSelect');
+        if (sel) {
+            if (lang) sel.value = lang;
+            sel.addEventListener('change', function() {
+                localStorage.setItem('regear_lang', this.value);
+            });
+        }
+    }
 
 
     // ===== WISHLIST & CHAT FUNCTIONALITY =====

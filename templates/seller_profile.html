@@ -46,7 +46,13 @@
         <div class="col-lg-4">
             <div class="profile-header">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="seller-avatar">{{ seller.username[0].upper() }}</div>
+                    <div class="seller-avatar" style="overflow:hidden;">
+                        {% if seller.profile_photo %}
+                          <img src="{{ seller.profile_photo|imgurl }}" alt="{{ seller.username }}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;">
+                        {% else %}
+                          {{ seller.username[0].upper() }}
+                        {% endif %}
+                    </div>
                     <div class="seller-info">
                         <h2>{{ seller.username }}</h2>
                         <div class="d-flex align-items-center gap-2">

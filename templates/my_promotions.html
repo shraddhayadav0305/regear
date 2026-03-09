@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payments & Promotions</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <style>
+    body { background:#f8f9fa; }
+    .section-card { border-radius:12px; border:none; box-shadow:0 2px 10px rgba(0,0,0,0.06); background:#fff; }
+    .badge-active { background:#16a34a; }
+    .badge-expired { background:#6b7280; }
+    .badge-deleted { background:#ef4444; }
+    .promo-card { border:1px solid #e5e7eb; border-radius:10px; padding:16px; }
+    .promo-img { width:72px; height:72px; border-radius:8px; object-fit:cover; background:#f3f4f6; }
+    .muted { color:#6b7280; }
+    .pill { padding:4px 10px; border-radius:16px; font-size:12px; }
+    .icon-upi { color:#0ea5e9; }
+  </style>
+  <script>
+    function iconForMethod(m){ if(!m) return 'fas fa-money-bill'; m=m.toLowerCase(); if(m==='upi')return 'fas fa-mobile-alt'; if(m==='netbanking')return 'fas fa-university'; if(m==='card'||m==='credit'||m==='debit'||m==='credit_card'||m==='debit_card')return 'far fa-credit-card'; return 'fas fa-money-bill'; }
+  </script>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="m-0">Payments & Promotions</h3>
+      <a href="{{ url_for('my_listings') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back to My Listings</a>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="section-card p-3">
+          <h5 class="mb-3"><i class="fas fa-bullhorn text-danger"></i> Active Promotions</h5>
+          {% if active and active|length>0 %}
+            <div class="row g-3">
+              {% for a in active %}
+              <div class="col-12">
+                <div class="promo-card d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-3">
+                    <img class="promo-img" src="{{ (a.photos.split(',')[0]|imgurl) if a.photos else '' }}" alt="" onerror="this.style.display='none'">
+                    <div>
+                      <div class="fw-semibold">{{ a.listing_title or 'Deleted Listing' }}</div>
+                      <div class="small muted">Plan: {{ a.package_name }} • Paid: ₹{{ a.amount|int if a.amount else '—' }}</div>
+                      <div class="small"><span class="muted">Start:</span> {{ a.start_date }} • <span class="muted">Expiry:</span> {{ a.expiry_date }}</div>
+                    </div>
+                  </div>
+                  <span class="badge badge-active pill">Active</span>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">No active promotions currently.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="section-card p-3">
+          <h5 class="mb-3"><i class="fas fa-clock text-warning"></i> Promotion History</h5>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Product</th>
+                  <th>Plan</th>
+                  <th>Amount</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if history and history|length>0 %}
+                  {% for h in history %}
+                  <tr>
+                    <td>{{ h.listing_title or 'Deleted Listing' }}</td>
+                    <td>{{ h.package_name }}</td>
+                    <td>₹{{ h.amount|int if h.amount else '—' }}</td>
+                    <td>{{ h.start_date }}</td>
+                    <td>{{ h.expiry_date }}</td>
+                    <td>
+                      {% if h.resolved_status == 'expired' %}
+                        <span class="badge badge-expired pill">Expired</span>
+                      {% elif h.resolved_status == 'listing_deleted' %}
+                        <span class="badge badge-deleted pill">Listing Deleted</span>
+                      {% else %}
+                        <span class="badge badge-active pill">{{ h.resolved_status|capitalize }}</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="6" class="text-center text-muted py-4">No past promotions</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="section-card p-3">
+          <h5 class="mb-3"><i class="fas fa-credit-card text-primary"></i> Payment History</h5>
+          {% if payments and payments|length>0 %}
+            <div class="row g-3">
+              {% for p in payments %}
+              <div class="col-12">
+                <div class="promo-card d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-semibold">Amount: ₹{{ p.amount|int }}</div>
+                    <div class="small">
+                      <i class="" id="m{{ p.id }}"></i>
+                      <script>document.getElementById('m{{ p.id }}').className = iconForMethod('{{ p.payment_method }}');</script>
+                      <span class="muted">Method:</span> {{ p.payment_method|replace('_',' ')|title }}
+                      • <span class="muted">Purpose:</span> {{ p.package_name or 'Ad Boost' }}
+                      • <span class="muted">Product:</span> {{ p.listing_title or 'Deleted Listing' }}
+                    </div>
+                    <div class="small"><span class="muted">Transaction ID:</span> {{ p.transaction_id or 'N/A' }} • <span class="muted">Date:</span> {{ p.created_at }}</div>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    {% if p.payment_status in ['success','paid'] %}
+                      <span class="badge badge-active pill">Successful</span>
+                    {% elif p.payment_status == 'refunded' %}
+                      <span class="badge badge-expired pill">Refunded</span>
+                    {% else %}
+                      <span class="badge badge-expired pill">{{ p.payment_status|capitalize }}</span>
+                    {% endif %}
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoice_download', payment_id=p.id) }}"><i class="fas fa-file-invoice"></i> Download Invoice</a>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">No payments found</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="section-card p-3">
+          <h5 class="mb-3"><i class="fas fa-chart-line text-success"></i> Promotion Insights</h5>
+          {% if insights and insights|length>0 %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Product</th>
+                  <th>Views</th>
+                  <th>Clicks</th>
+                  <th>Messages</th>
+                  <th>Boost Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for i in insights %}
+                <tr>
+                  <td>{{ i.title }}</td>
+                  <td>{{ i.views }}</td>
+                  <td>{{ i.clicks }}</td>
+                  <td>{{ i.messages }}</td>
+                  <td>{{ i.duration_days }} days</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+            <div class="text-center text-muted py-4">No insights to display</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -166,21 +166,60 @@ def boosted_listings():
     try:
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        cur.execute("""
-            SELECT pb.id, pb.listing_id, pb.user_id, pb.boost_type, pb.price, pb.days_active,
-                   pb.created_at as start_date, pb.expires_at as end_date,
-                   l.title, u.username
-            FROM product_boosts pb
-            JOIN listings l ON pb.listing_id = l.id
-            JOIN users u ON pb.user_id = u.id
-            ORDER BY pb.created_at DESC
-        """)
+        try:
+            cur.execute("""
+                SELECT b.id, b.ad_id as listing_id, b.user_id, p.boost_type, p.price, p.duration_days,
+                       b.start_date as start_date, b.expiry_date as end_date,
+                       l.title, u.username
+                FROM ad_boosts b
+                JOIN boost_packages p ON p.id=b.package_id
+                JOIN listings l ON b.ad_id = l.id
+                JOIN users u ON b.user_id = u.id
+                ORDER BY b.start_date DESC
+            """)
+        except Exception:
+            cur.execute("SELECT 0 id, 0 listing_id, 0 user_id, '' boost_type, 0 price, 0 duration_days, NOW() start_date, NOW() end_date, '' title, '' username WHERE 1=0")
         records = cur.fetchall()
         cur.close()
         conn.close()
     except Exception:
         records = []
     return render_template("admin/admin_boosted.html", records=records)
+
+@admin_bp.route("/boosted-ads")
+@admin_required
+def boosted_ads_alias():
+    return boosted_listings()
+
+@admin_bp.route("/boost-sales")
+@admin_required
+def boost_sales():
+    rows = []
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute("""
+                SELECT pay.id, u.username, l.title, l.status as listing_status,
+                       bp.name as package_name, pay.amount, pay.method, pay.status, pay.created_at,
+                       b.status as promotion_status
+                FROM payments pay
+                JOIN users u ON u.id=pay.user_id
+                LEFT JOIN listings l ON l.id=pay.ad_id
+                LEFT JOIN boost_packages bp ON bp.id=pay.package_id
+                LEFT JOIN ad_boosts b ON b.payment_id = pay.id
+                WHERE pay.ad_id IS NOT NULL
+                ORDER BY pay.created_at DESC
+                LIMIT 200
+            """)
+            rows = cur.fetchall()
+        except Exception:
+            rows = []
+        cur.close()
+        conn.close()
+    except Exception:
+        rows = []
+    return render_template("admin/admin_payments.html", payments=rows, stats={})
 
 # ==============================
 # CATEGORIES MANAGEMENT (index)
@@ -353,26 +392,282 @@ def revenue():
 @admin_bp.route("/analytics")
 @admin_required
 def analytics():
-    insights = {
-        "active_sellers": 0,
-        "top_category": "",
-        "top_category_count": 0,
-        "new_users_this_month": 0,
-        "new_users_this_year": 0,
-        "avg_users_per_day": 0,
-        "seller_activity_rate": 0,
-        "subscription_mix": {
-            "basic": 0,
-            "standard": 0,
-            "premium": 0
-        },
-        "category_labels": [],
-        "category_counts": [],
-        "peak_revenue_day": "",
-        "most_sold_category": "",
-        "avg_listing_price": 0,
-        "churn_rate": 0
-    }
+    insights = {}
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        # KPIs
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE role!='admin'")
+            total_users = cur.fetchone()["c"]
+        except Exception:
+            total_users = 0
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM listings")
+            total_listings = cur.fetchone()["c"]
+        except Exception:
+            total_listings = 0
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='active' AND approval_status='approved'")
+            active_listings = cur.fetchone()["c"]
+        except Exception:
+            active_listings = 0
+        # boosted ads
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM ad_boosts WHERE status='active' AND expiry_date>NOW()")
+            boosted_ads = cur.fetchone()["c"]
+        except Exception:
+            boosted_ads = 0
+        # revenue
+        try:
+            cur.execute("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE status IN ('success','paid')")
+            total_revenue = float(cur.fetchone()["s"] or 0)
+        except Exception:
+            total_revenue = 0.0
+        # new users this week
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)")
+            new_users_week = cur.fetchone()["c"]
+        except Exception:
+            new_users_week = 0
+        # delta vs previous week
+        try:
+            cur.execute("""
+                SELECT 
+                  SUM(CASE WHEN created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as this_wk,
+                  SUM(CASE WHEN created_at<DATE_SUB(NOW(), INTERVAL 7 DAY) AND created_at>=DATE_SUB(NOW(), INTERVAL 14 DAY) THEN 1 ELSE 0 END) as prev_wk
+                FROM users
+            """)
+            r = cur.fetchone()
+            new_users_week_prev = int(r["prev_wk"] or 0)
+            new_users_week_delta = new_users_week - new_users_week_prev
+        except Exception:
+            new_users_week_delta = 0
+        # revenue by month (last 6-8 months)
+        rev_labels, rev_values = [], []
+        try:
+            cur.execute("""
+                SELECT DATE_FORMAT(created_at,'%b %Y') as ym, SUM(amount) as amt, MIN(created_at) as d
+                FROM payments WHERE status IN ('success','paid')
+                GROUP BY DATE_FORMAT(created_at,'%Y-%m')
+                ORDER BY MIN(created_at) ASC
+                LIMIT 12
+            """)
+            rows = cur.fetchall()
+            rev_labels = [r["ym"] for r in rows]
+            rev_values = [float(r["amt"] or 0) for r in rows]
+        except Exception:
+            pass
+        # revenue growth percent MoM
+        revenue_growth_pct = 0
+        if len(rev_values) >= 2:
+            prev = rev_values[-2] or 0
+            curr = rev_values[-1] or 0
+            revenue_growth_pct = int(((curr - prev) / prev) * 100) if prev else (100 if curr > 0 else 0)
+        # listings per day (last 14 days)
+        lst_day_labels, lst_day_counts = [], []
+        try:
+            cur.execute("""
+                SELECT DATE(created_at) as d, COUNT(*) as c
+                FROM listings
+                WHERE created_at>=DATE_SUB(NOW(), INTERVAL 14 DAY)
+                GROUP BY DATE(created_at) ORDER BY d
+            """)
+            rows = cur.fetchall()
+            lst_day_labels = [r["d"].strftime("%d %b") for r in rows]
+            lst_day_counts = [int(r["c"] or 0) for r in rows]
+        except Exception:
+            pass
+        # active vs sold
+        active_vs_sold = [0, 0]
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='active'")
+            active_vs_sold[0] = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='sold' OR approval_status='sold'")
+            active_vs_sold[1] = cur.fetchone()["c"]
+        except Exception:
+            pass
+        # listings by category & top 10
+        cat_labels, cat_counts = [], []
+        try:
+            cur.execute("""
+                SELECT category, COUNT(*) as c FROM listings
+                GROUP BY category ORDER BY c DESC LIMIT 10
+            """)
+            rows = cur.fetchall()
+            cat_labels = [r["category"] for r in rows if r["category"]]
+            cat_counts = [int(r["c"]) for r in rows if r["category"]]
+        except Exception:
+            pass
+        top_category = cat_labels[0] if cat_labels else ""
+        top_category_count = cat_counts[0] if cat_counts else 0
+        # user growth daily (last 14 days)
+        usr_day_labels, usr_day_counts = [], []
+        try:
+            cur.execute("""
+                SELECT DATE(created_at) as d, COUNT(*) as c
+                FROM users
+                WHERE created_at>=DATE_SUB(NOW(), INTERVAL 14 DAY)
+                GROUP BY DATE(created_at) ORDER BY d
+            """)
+            rows = cur.fetchall()
+            usr_day_labels = [r["d"].strftime("%d %b") for r in rows]
+            usr_day_counts = [int(r["c"] or 0) for r in rows]
+        except Exception:
+            pass
+        # new users this month/year
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
+            new_users_this_month = cur.fetchone()["c"]
+        except Exception:
+            new_users_this_month = 0
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE YEAR(created_at)=YEAR(NOW())")
+            new_users_this_year = cur.fetchone()["c"]
+        except Exception:
+            new_users_this_year = 0
+        # health metrics
+        listing_completion_rate = 0
+        user_engagement_rate = 0
+        boost_usage_pct = 0
+        active_users_7d = 0
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM listings")
+            total_l = cur.fetchone()["c"] or 0
+            cur.execute("SELECT COUNT(*) as c FROM listings WHERE COALESCE(description,'')<>'' AND COALESCE(photos,'')<>''")
+            complete_l = cur.fetchone()["c"] or 0
+            listing_completion_rate = int((complete_l/total_l)*100) if total_l else 0
+        except Exception:
+            pass
+        try:
+            # engagement: messages in last 7 days per active listing ratio scaled to %
+            cur.execute("SELECT COUNT(*) as c FROM messages WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)")
+            msg7 = cur.fetchone()["c"] or 0
+            cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='active'")
+            act = cur.fetchone()["c"] or 0
+            user_engagement_rate = min(100, int((msg7 / max(act,1)) * 20))  # heuristic scale
+        except Exception:
+            pass
+        try:
+            boost_usage_pct = int((boosted_ads / max(active_listings,1)) * 100) if active_listings else 0
+        except Exception:
+            pass
+        try:
+            cur.execute("""
+                SELECT COUNT(DISTINCT user_id) as c FROM (
+                    SELECT user_id, created_at FROM listings WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)
+                    UNION ALL
+                    SELECT sender_id as user_id, created_at FROM messages WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)
+                ) t
+            """)
+            active_users_7d = cur.fetchone()["c"] or 0
+        except Exception:
+            pass
+        # boosted ads performance
+        boosts_total, boosts_revenue, boosted_cat_labels, boosted_cat_counts = 0, 0, [], []
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM ad_boosts")
+            boosts_total = cur.fetchone()["c"] or 0
+        except Exception:
+            pass
+        try:
+            cur.execute("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE package_id IS NOT NULL AND status IN ('success','paid')")
+            boosts_revenue = float(cur.fetchone()["s"] or 0)
+        except Exception:
+            pass
+        try:
+            cur.execute("""
+                SELECT l.category, COUNT(*) as c
+                FROM ad_boosts b
+                JOIN listings l ON b.ad_id=l.id
+                GROUP BY l.category
+                ORDER BY c DESC
+                LIMIT 5
+            """)
+            rows = cur.fetchall()
+            boosted_cat_labels = [r["category"] for r in rows if r["category"]]
+            boosted_cat_counts = [int(r["c"]) for r in rows if r["category"]]
+        except Exception:
+            pass
+        # automatic insights
+        auto_insights = []
+        try:
+            auto_insights.append(f"Revenue {'increased' if revenue_growth_pct>=0 else 'decreased'} {abs(revenue_growth_pct)}% compared to last month")
+            if top_category:
+                auto_insights.append(f"'{top_category}' has the highest listings")
+            if new_users_week_delta >= 0:
+                auto_insights.append("User registrations increased this week")
+            else:
+                auto_insights.append("User registrations decreased this week")
+        except Exception:
+            pass
+        # recent activity
+        recent = []
+        try:
+            cur.execute("SELECT 'user' as t, username as title, created_at FROM users ORDER BY created_at DESC LIMIT 5")
+            recent += [{"type":"user","title":r["title"],"created_at":r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
+        except Exception:
+            pass
+        try:
+            cur.execute("SELECT 'listing' as t, title, created_at FROM listings ORDER BY created_at DESC LIMIT 5")
+            recent += [{"type":"listing","title":r["title"],"created_at":r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
+        except Exception:
+            pass
+        try:
+            cur.execute("""
+                SELECT 'boost' as t, CONCAT('Boost purchased for Ad #', ad_id) as title, created_at 
+                FROM payments WHERE package_id IS NOT NULL ORDER BY created_at DESC LIMIT 5
+            """)
+            recent += [{"type":"boost","title":r["title"],"created_at":r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
+        except Exception:
+            pass
+        # finalize insights
+        insights = {
+            "kpis": {
+                "total_users": total_users,
+                "total_listings": total_listings,
+                "active_listings": active_listings,
+                "boosted_ads": boosted_ads,
+                "total_revenue": int(total_revenue),
+                "new_users_week": new_users_week,
+                "new_users_week_delta": new_users_week_delta
+            },
+            "revenue_month_labels": rev_labels,
+            "revenue_month_totals": rev_values,
+            "revenue_growth_pct": revenue_growth_pct,
+            "listings_day_labels": lst_day_labels,
+            "listings_day_counts": lst_day_counts,
+            "active_vs_sold": active_vs_sold,
+            "category_labels": cat_labels,
+            "category_counts": cat_counts,
+            "top_category": top_category,
+            "top_category_count": top_category_count,
+            "user_day_labels": usr_day_labels,
+            "user_day_counts": usr_day_counts,
+            "new_users_this_month": new_users_this_month,
+            "new_users_this_year": new_users_this_year,
+            "avg_users_per_day": int(sum(usr_day_counts)/max(len(usr_day_counts),1)),
+            "listing_completion_rate": listing_completion_rate,
+            "user_engagement_rate": user_engagement_rate,
+            "boost_usage_pct": boost_usage_pct,
+            "active_users_7d": active_users_7d,
+            "boosts_total": boosts_total,
+            "boosts_revenue": int(boosts_revenue),
+            "boosted_cat_labels": boosted_cat_labels,
+            "boosted_cat_counts": boosted_cat_counts,
+            "auto_insights": auto_insights,
+            "recent": recent,
+            "seller_activity_rate": 0,
+            "subscription_mix": { "basic": 0, "standard": 0, "premium": 0 },
+            "peak_revenue_day": "",
+            "most_sold_category": "",
+            "avg_listing_price": 0,
+            "churn_rate": 0
+        }
+        cur.close()
+        conn.close()
+    except Exception:
+        pass
     return render_template("admin/admin_insights.html", insights=insights)
 
 # ==============================

@@ -120,6 +120,46 @@
             background: rgba(255, 255, 255, 0.3);
             color: white;
         }
+        .profile-trigger {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            position: relative;
+            padding: 6px 10px;
+            border-radius: 20px;
+            transition: background 0.2s ease;
+            color: #fff;
+            text-decoration: none;
+        }
+        .profile-trigger:hover { background: rgba(255,255,255,0.15); }
+        .profile-dropdown {
+            position: absolute;
+            right: 0;
+            top: 110%;
+            width: 280px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+            padding: 10px;
+            z-index: 2200;
+        }
+        .profile-dropdown.hidden { display: none; }
+        .profile-menu a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: #333;
+            text-decoration: none;
+        }
+        .profile-menu a:hover { background: #f5f8ff; }
+        .profile-divider {
+            height: 1px;
+            background: #eee;
+            margin: 6px 0;
+        }
 
         /* MAIN CONTENT */
         .container-wrapper {
@@ -409,36 +449,61 @@
     <!-- NAVBAR -->
     <nav class="navbar-custom">
         <div class="navbar-content">
-            <a href="/" class="navbar-brand">
+            <a href="{{ url_for('home') }}" class="navbar-brand">
                 <i class="fas fa-sync-alt"></i>
                 ReGear
             </a>
             <div class="user-menu">
-                <div class="user-info">
-                    <div class="user-avatar">{{ username[0].upper() }}</div>
-                    <div class="user-details">
-                        <p>{{ username }}</p>
-                        <small>{{ role|capitalize }} Account</small>
+                <div class="profile-trigger" id="dashProfileTrigger">
+                    <div class="user-info">
+                        <div class="user-avatar" style="overflow:hidden;width:35px;height:35px;border-radius:50%;">
+                            {% if current_user and current_user.photo %}
+                              <img src="{{ current_user.photo|imgurl }}" alt="profile" style="width:35px;height:35px;border-radius:50%;object-fit:cover;">
+                            {% else %}
+                              {{ username[0].upper() }}
+                            {% endif %}
+                        </div>
+                        <div class="user-details">
+                            <p>{{ username }}</p>
+                            <small>{{ role|capitalize }} Account</small>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-down" style="font-size:.8rem;"></i>
+                    <div class="profile-dropdown hidden" id="dashProfileDropdown">
+                        <div class="profile-menu">
+                            <a href="{{ url_for('profile') }}"><i class="fas fa-user"></i> View Profile</a>
+                        </div>
+                        <div class="profile-divider"></div>
+                        <div class="profile-menu">
+                            <a href="{{ url_for('dashboard') }}"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                            <a href="{{ url_for('my_listings') }}"><i class="fas fa-list"></i> My Listings</a>
+                            <a href="{{ url_for('sell') }}"><i class="fas fa-plus-circle"></i> Post New Ad</a>
+                            <a href="{{ url_for('messages_list') }}"><i class="fas fa-comments"></i> Messages</a>
+                            <a href="{{ url_for('favorites') }}"><i class="fas fa-heart"></i> Favorites</a>
+                            <a href="{{ url_for('payments') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
+                        </div>
+                        <div class="profile-divider"></div>
+                        <div class="profile-menu">
+                            <a href="{{ url_for('profile') }}"><i class="fas fa-cog"></i> Settings</a>
+                            <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                        </div>
                     </div>
                 </div>
-                <a href="/logout" class="btn-logout" onclick="return confirm('Are you sure you want to logout?');">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
             </div>
         </div>
     </nav>
 
     <!-- SIDEBAR -->
     <aside class="sidebar-fixed">
-        <a class="sidebar-link {% if request.path == '/dashboard' %}sidebar-active{% endif %}" href="/dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
-        <a class="sidebar-link {% if request.path.startswith('/my-listings') %}sidebar-active{% endif %}" href="/my-listings"><i class="fas fa-list"></i> My Listings</a>
-        <a class="sidebar-link" href="/sell"><i class="fas fa-plus-circle"></i> Post New Ad</a>
-        <a class="sidebar-link {% if request.path.startswith('/favorites') or request.path == '/saved' %}sidebar-active{% endif %}" href="/favorites"><i class="fas fa-heart"></i> Favorites</a>
-        <a class="sidebar-link {% if request.path.startswith('/messages') %}sidebar-active{% endif %}" href="/messages"><i class="fas fa-comments"></i> Messages</a>
-        <a class="sidebar-link {% if request.path.startswith('/profile') %}sidebar-active{% endif %}" href="/profile"><i class="fas fa-user"></i> My Profile</a>
-        <a class="sidebar-link {% if request.path.startswith('/payments') %}sidebar-active{% endif %}" href="/payments"><i class="fas fa-wallet"></i> Payments / Promotions</a>
-        <a class="sidebar-link" href="/profile"><i class="fas fa-cog"></i> Settings</a>
-        <a class="sidebar-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <a class="sidebar-link {% if request.path == url_for('dashboard') %}sidebar-active{% endif %}" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-pie"></i> Dashboard</a>
+        <a class="sidebar-link {% if request.path.startswith('/my-listings') %}sidebar-active{% endif %}" href="{{ url_for('my_listings') }}"><i class="fas fa-list"></i> My Listings</a>
+        <a class="sidebar-link" href="{{ url_for('sell') }}"><i class="fas fa-plus-circle"></i> Post New Ad</a>
+        <a class="sidebar-link {% if request.path.startswith('/favorites') or request.path == '/saved' %}sidebar-active{% endif %}" href="{{ url_for('favorites') }}"><i class="fas fa-heart"></i> Favorites</a>
+        <a class="sidebar-link {% if request.path.startswith('/messages') %}sidebar-active{% endif %}" href="{{ url_for('messages_list') }}"><i class="fas fa-comments"></i> Messages</a>
+        <a class="sidebar-link {% if request.path.startswith('/profile') %}sidebar-active{% endif %}" href="{{ url_for('profile') }}"><i class="fas fa-user"></i> My Profile</a>
+        <a class="sidebar-link {% if request.path.startswith('/payments') %}sidebar-active{% endif %}" href="{{ url_for('payments') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
+        <a class="sidebar-link" href="{{ url_for('profile') }}"><i class="fas fa-cog"></i> Settings</a>
+        <a class="sidebar-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </aside>
 
     <!-- MAIN CONTENT -->
@@ -584,6 +649,24 @@
                     }, 300);
                 }, 5000);
             });
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const t = document.getElementById('dashProfileTrigger');
+            const d = document.getElementById('dashProfileDropdown');
+            if (t) {
+                t.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    d.classList.toggle('hidden');
+                });
+                document.addEventListener('click', function(e) {
+                    if (!e.target.closest('#dashProfileTrigger')) {
+                        if (!d.classList.contains('hidden')) d.classList.add('hidden');
+                    }
+                });
+            }
         });
     </script>
 
