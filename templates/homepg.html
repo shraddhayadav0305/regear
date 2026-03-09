@@ -1672,10 +1672,10 @@
                 
                 cats.forEach(([catName, catData]) => {
                     const bgImage = catData.image ? `background-image: url('${catData.image}');` : '';
-                    html += `<div class="category-item" onclick="showSubcategories('${catName}', ${JSON.stringify(catData.subcategories).replace(/'/g, "&apos;")})">
+                    html += `<a class="category-item" href="/category/${encodeURIComponent(catName)}" title="${catName}">
                                 <div class="category-icon-box" style="${bgImage}"></div>
                                 <div class="category-name">${catName}</div>
-                            </div>`;
+                            </a>`;
                 });
                 
                 grid.innerHTML = html;
@@ -1693,7 +1693,7 @@
         if (subcats && subcats.length > 0) {
             let html = '';
             subcats.forEach(sub => {
-                html += `<a href="/browse?category=${encodeURIComponent(categoryName)}" class="subcategory-item">
+                html += `<a href="/category/${encodeURIComponent(categoryName)}" class="subcategory-item">
                             <div class="subcategory-icon"><i class="fas fa-box"></i></div>
                             <div class="subcategory-name">${sub.name}</div>
                         </a>`;

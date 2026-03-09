@@ -214,8 +214,17 @@ def login():
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
 
-            cursor.execute("SELECT id, password, role, username, profile_photo, profile_image FROM users WHERE email=%s", (email,))
-            row = cursor.fetchone()
+            try:
+                cursor.execute("SELECT id, password, role, username, profile_photo, profile_image FROM users WHERE email=%s", (email,))
+                row = cursor.fetchone()
+            except Exception:
+                cursor.execute("SELECT id, password, role, username FROM users WHERE email=%s", (email,))
+                tmp = cursor.fetchone()
+                row = tmp if tmp else None
+                if row:
+                    # normalize to expected keys
+                    row["profile_photo"] = None
+                    row["profile_image"] = None
 
             cursor.close()
             conn.close()
@@ -940,6 +949,56 @@ def browse():
         
     except Exception as e:
         flash(f"❌ Error loading listings: {str(e)}", "error")
+        return redirect(url_for("home"))
+
+@app.route("/category/<path:category_name>")
+def category_page(category_name):
+    """Category landing page with filters and boosted-first sorting"""
+    cat = category_name
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
+    condition = request.args.get('condition', '').strip()
+    sort = request.args.get('sort', 'newest')  # newest | price_asc | price_desc
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        query = """
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos,
+                   CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted,
+                   b.expiry_date AS boost_expiry
+            FROM listings l
+            LEFT JOIN ad_boosts b ON b.ad_id=l.id AND b.status='active' AND b.expiry_date>NOW()
+            WHERE l.approval_status='approved' AND l.status='active' AND l.category=%s
+        """
+        params = [cat]
+        if min_price is not None:
+            query += " AND l.price >= %s"
+            params.append(min_price)
+        if max_price is not None:
+            query += " AND l.price <= %s"
+            params.append(max_price)
+        if condition:
+            query += " AND (l.item_condition=%s OR l.condition=%s)"
+            params.extend([condition, condition])
+        order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.created_at DESC"
+        if sort == 'price_asc':
+            order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price ASC"
+        elif sort == 'price_desc':
+            order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price DESC"
+        query += order_clause
+        try:
+            cursor.execute(query, params)
+        except Exception:
+            query = query.replace("l.location", "'' AS location")
+            cursor.execute(query, params)
+        listings = cursor.fetchall()
+        total = len(listings)
+        cursor.close()
+        conn.close()
+        return render_template("category.html", category=cat, total=total, listings=listings,
+                               min_price=min_price, max_price=max_price, condition=condition, sort=sort)
+    except Exception as e:
+        flash(f"❌ Error loading category: {e}", "error")
         return redirect(url_for("home"))
 
 # ---------- Helper routines for conversations/messages ----------
