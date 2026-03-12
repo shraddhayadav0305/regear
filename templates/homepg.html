@@ -327,8 +327,8 @@
         }
         .profile-trigger:hover { background: #f0f5ff; }
         .profile-avatar {
-            width: 35px;
-            height: 35px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: #fff;
@@ -555,9 +555,11 @@
             box-shadow: 0 5px 15px rgba(255, 204, 0, 0.4);
         }
 
-        /* HERO SECTION */
         .hero-section {
-            background: linear-gradient(135deg, #002f34 0%, #1a5f73 100%);
+            background-image: linear-gradient(135deg, rgba(0,47,52,0.9) 0%, rgba(26,95,115,0.85) 100%), url('{{ url_for("static", filename="images/different-types-of-electronic-components.jpg") }}');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
             color: white;
             padding: 80px 0;
             text-align: center;
@@ -1150,10 +1152,15 @@
                 <li class="nav-item ms-2">
                     <div class="profile-trigger" id="profileTrigger">
                         <div class="profile-avatar">
-                            {% if current_user and current_user.photo %}
-                                <img src="{{ current_user.photo|imgurl }}" alt="profile">
+                            {% set nav_photo = (g.user.profile_photo if g and g.user and g.user.profile_photo else None) or session.get('profile_photo') or (current_user.photo if current_user else None) %}
+                            {% if nav_photo %}
+                                {% if '/' in nav_photo %}
+                                    <img src="{{ nav_photo }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                                {% else %}
+                                    <img src="{{ url_for('static', filename='profile_photos/' ~ nav_photo) }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                                {% endif %}
                             {% else %}
-                                {{ user_initial }}
+                                <img src="{{ url_for('static', filename='images/default-avatar.png') }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
                             {% endif %}
                         </div>
                         <div class="profile-name d-none d-md-block">{{ username }}</div>
@@ -1161,10 +1168,15 @@
                         <div class="profile-dropdown hidden" id="profileDropdown">
                             <div class="profile-header">
                                 <div class="profile-avatar">
-                                    {% if current_user and current_user.photo %}
-                                        <img src="{{ current_user.photo|imgurl }}" alt="profile">
+                                    {% set nav_photo = (g.user.profile_photo if g and g.user and g.user.profile_photo else None) or session.get('profile_photo') or (current_user.photo if current_user else None) %}
+                                    {% if nav_photo %}
+                                        {% if '/' in nav_photo %}
+                                            <img src="{{ nav_photo }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                                        {% else %}
+                                            <img src="{{ url_for('static', filename='profile_photos/' ~ nav_photo) }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                                        {% endif %}
                                     {% else %}
-                                        {{ user_initial }}
+                                        <img src="{{ url_for('static', filename='images/default-avatar.png') }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
                                     {% endif %}
                                 </div>
                                 <div>
@@ -1747,9 +1759,8 @@
     let unreadCount = 0;
 
     function initWishlistChat() {
-        // chat initialization still uses localStorage earlier logic
-        loadChat();
-        updateChatBadge();
+        fetchWishlist();
+        fetchChat();
     }
 
     function toggleWishlist() {
@@ -1849,24 +1860,20 @@
         showToast(`New message from ${senderName}`, 'info');
     }
 
-    function displayChat() {
+    function displayChat(convs) {
         const container = document.getElementById('chatContent');
-        
-        if (chatMessages.length === 0) {
-            container.innerHTML = '<p class="empty-message">No messages yet. Start selling to receive messages!</p>';
+        if (!convs || convs.length === 0) {
+            container.innerHTML = '<p class="empty-message">No messages yet</p>';
             return;
         }
-
-        container.innerHTML = chatMessages.map(msg => `
-            <div class="chat-item">
-                <div class="chat-item-avatar">
-                    ${msg.sender.charAt(0).toUpperCase()}
-                </div>
+        container.innerHTML = convs.map(c => `
+            <a href="/chat/${c.id}" class="chat-item" style="text-decoration:none;color:inherit;">
+                <div class="chat-item-avatar">${(c.other_user || 'U').charAt(0).toUpperCase()}</div>
                 <div class="chat-item-info">
-                    <div class="chat-item-name">${msg.sender}</div>
-                    <div class="chat-item-message">${msg.message.substring(0, 40)}...</div>
+                    <div class="chat-item-name">${c.other_user || 'User'}</div>
+                    <div class="chat-item-message">${(c.last_message || '').substring(0, 60)}</div>
                 </div>
-            </div>
+            </a>
         `).join('');
     }
 
@@ -1932,6 +1939,24 @@
             chatPanel.classList.add('hidden');
         }
     });
+
+    function fetchChat() {
+        fetch('/api/messages/summary')
+            .then(r => r.json())
+            .then(data => {
+                displayChat(data);
+                const badge = document.getElementById('chatBadge');
+                const count = Array.isArray(data) ? data.length : 0;
+                badge.textContent = count > 0 ? count : '0';
+                badge.style.display = count > 0 ? 'flex' : 'none';
+            })
+            .catch(() => {
+                displayChat([]);
+                const badge = document.getElementById('chatBadge');
+                badge.textContent = '0';
+                badge.style.display = 'none';
+            });
+    }
 
     // Initialize wishlist and chat on page load
     window.addEventListener('load', () => {

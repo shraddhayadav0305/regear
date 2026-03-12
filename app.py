@@ -73,15 +73,37 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'user_id' not in session or session.get('role') != 'admin':
-            flash("❌ Admin access only!", "error")
-            return redirect(url_for("dashboard"))
+            flash("❌ Admin access only! Please login as admin.", "error")
+            return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return decorated
 
+def user_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            flash("Please login first!", "error")
+            return redirect(url_for("login", next=request.path))
+        if session.get('role') == 'admin':
+            flash("Access restricted to users", "error")
+            return redirect(url_for("admin.dashboard"))
+        return f(*args, **kwargs)
+    return decorated
 
-# ===========================
-# BASIC ROUTES
-# ===========================
+@app.route("/api/debug-session")
+def debug_session():
+    try:
+        return jsonify({
+            "user_id": session.get("user_id"),
+            "username": session.get("username"),
+            "role": session.get("role"),
+            "has_profile_photo": bool(session.get("profile_photo"))
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 
 @app.route("/")
 def home():
@@ -236,8 +258,14 @@ def login():
             user_id = row["id"]
             db_password = row["password"]
             role = row["role"]
+            role_normalized = (str(role).strip().lower() if role else '')
             username = row["username"]
             profile_photo = row.get("profile_photo") or row.get("profile_image")
+            if profile_photo:
+                try:
+                    profile_photo = str(profile_photo).replace('\\', '/').split('/')[-1]
+                except Exception:
+                    pass
 
             if role == "blocked":
                 flash("❌ Your account has been blocked. Please contact support.", "error")
@@ -246,21 +274,35 @@ def login():
             if verify_password(db_password, password):
 
                 session["user_id"] = user_id
-                session["role"] = role
+                # Treat classic 'admin' username or well-known admin email as admin if role not set properly
+                special_admin_email = (str(email).strip().lower() == "admin@regear.com")
+                is_admin = (role_normalized == "admin") or (str(username).strip().lower() == "admin") or special_admin_email
+                # If special admin email used, ensure role persisted in DB
+                if special_admin_email and role_normalized != "admin":
+                    try:
+                        conn2 = get_db_connection()
+                        c2 = conn2.cursor()
+                        c2.execute("UPDATE users SET role='admin' WHERE id=%s", (user_id,))
+                        conn2.commit()
+                        c2.close()
+                        conn2.close()
+                    except Exception:
+                        pass
+                session["role"] = "admin" if is_admin else "user"
                 session["username"] = username
                 session["profile_photo"] = profile_photo
 
                 flash("✅ Login successful", "success")
 
-                # Redirect back to 'next' if present (safe relative path)
+                # Redirect handling with admin precedence
                 next_url = request.form.get('next') or request.args.get('next')
-                if next_url and next_url.startswith('/'):
-                    return redirect(next_url)
-
-                # ROLE BASED REDIRECT fallback
-                if role == "admin":
+                if is_admin:
+                    if next_url and next_url.startswith('/admin'):
+                        return redirect(next_url)
                     return redirect(url_for("admin.dashboard"))
                 else:
+                    if next_url and next_url.startswith('/'):
+                        return redirect(next_url)
                     return redirect(url_for("home"))
 
             else:
@@ -330,6 +372,7 @@ def reset_password():
 
 @app.route("/dashboard")
 @login_required
+@user_required
 def dashboard():
     try:
         user_id = session.get('user_id')
@@ -2356,12 +2399,13 @@ if __name__ == "__main__":
     if sys.platform == 'win32':
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+    # Startup info
+    print("Starting ReGear Server...")
+    print(" Server running at: http://localhost:5000")
+    print(" Register: http://localhost:5000/register")
+    print(" Login: http://localhost:5000/login")
+    print(" Sell: http://localhost:5000/sell")
+
     # Run the Flask development server
-    app.run(host='0.0.0.0', port=5000, debug=True)
-    
-    print("🚀 Starting ReGear Server...")
-    print("📍 Server running at: http://localhost:5000")
-    print("📝 Register: http://localhost:5000/register")
-    print("🔐 Login: http://localhost:5000/login")
-    print("🛍️ Sell: http://localhost:5000/sell")
-    app.run(debug=False, host='127.0.0.1', port=5000, use_reloader=False)
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+

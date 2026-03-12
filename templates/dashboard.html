@@ -456,11 +456,16 @@
             <div class="user-menu">
                 <div class="profile-trigger" id="dashProfileTrigger">
                     <div class="user-info">
-                        <div class="user-avatar" style="overflow:hidden;width:35px;height:35px;border-radius:50%;">
-                            {% if current_user and current_user.photo %}
-                              <img src="{{ current_user.photo|imgurl }}" alt="profile" style="width:35px;height:35px;border-radius:50%;object-fit:cover;">
+                        <div class="user-avatar" style="overflow:hidden;width:36px;height:36px;border-radius:50%;">
+                            {% set nav_photo = (g.user.profile_photo if g and g.user and g.user.profile_photo else None) or session.get('profile_photo') or (current_user.photo if current_user else None) %}
+                            {% if nav_photo %}
+                              {% if '/' in nav_photo %}
+                                <img src="{{ nav_photo }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                              {% else %}
+                                <img src="{{ url_for('static', filename='profile_photos/' ~ nav_photo) }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                              {% endif %}
                             {% else %}
-                              {{ username[0].upper() }}
+                              <img src="{{ url_for('static', filename='images/default-avatar.png') }}" alt="profile" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
                             {% endif %}
                         </div>
                         <div class="user-details">

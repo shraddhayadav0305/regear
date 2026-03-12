@@ -546,9 +546,10 @@
                         <div class="seller-header">
                             <div class="seller-avatar" style="overflow:hidden;">
                                 {% if listing.seller_photo %}
-                                  <img src="{{ listing.seller_photo|imgurl }}" alt="{{ listing.username }}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;">
+                                  {% set s = listing.seller_photo if '/' in listing.seller_photo else ('/static/profile_photos/' ~ listing.seller_photo) %}
+                                  <img src="{{ s }}" alt="{{ listing.username }}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;">
                                 {% else %}
-                                  {{ listing.username[0].upper() }}
+                                  <img src="/static/images/default-avatar.png" alt="{{ listing.username }}" style="width:70px;height:70px;border-radius:50%;object-fit:cover;">
                                 {% endif %}
                             </div>
                             <div class="seller-info">
