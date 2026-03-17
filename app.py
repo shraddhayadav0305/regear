@@ -900,7 +900,23 @@ def category_page(category_name):
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        query = """
+
+        # Determine which condition column exists (some schemas use `item_condition`,
+        # older schemas use `condition`). This avoids crashes when a column is missing.
+        condition_column = None
+        try:
+            cursor.execute("SHOW COLUMNS FROM listings LIKE 'item_condition'")
+            if cursor.fetchone():
+                condition_column = 'item_condition'
+            else:
+                cursor.execute("SHOW COLUMNS FROM listings LIKE 'condition'")
+                if cursor.fetchone():
+                    condition_column = 'condition'
+        except Exception:
+            # In case SHOW COLUMNS is not permitted, fall back to item_condition
+            condition_column = 'item_condition'
+
+        base_query = """
             SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos,
                    CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted,
                    b.expiry_date AS boost_expiry
@@ -908,6 +924,7 @@ def category_page(category_name):
             LEFT JOIN ad_boosts b ON b.ad_id=l.id AND b.status='active' AND b.expiry_date>NOW()
             WHERE l.approval_status='approved' AND l.status='active' AND l.category=%s
         """
+        query = base_query
         params = [cat]
         if min_price is not None:
             query += " AND l.price >= %s"
@@ -915,20 +932,27 @@ def category_page(category_name):
         if max_price is not None:
             query += " AND l.price <= %s"
             params.append(max_price)
-        if condition:
-            query += " AND (l.item_condition=%s OR l.condition=%s)"
-            params.extend([condition, condition])
+        if condition and condition_column:
+            query += f" AND l.{condition_column}=%s"
+            params.append(condition)
+        elif condition and not condition_column:
+            # If we cannot locate a condition column, ignore the filter rather than breaking the page
+            app.logger.warning("Condition filter ignored: no condition column found in listings table")
+
         order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.created_at DESC"
         if sort == 'price_asc':
             order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price ASC"
         elif sort == 'price_desc':
             order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price DESC"
         query += order_clause
+
         try:
             cursor.execute(query, params)
-        except Exception:
+        except Exception as e:
+            app.logger.exception("Category query failed, retrying without location")
             query = query.replace("l.location", "'' AS location")
             cursor.execute(query, params)
+
         listings = cursor.fetchall()
         total = len(listings)
         cursor.close()
@@ -936,8 +960,11 @@ def category_page(category_name):
         return render_template("category.html", category=cat, total=total, listings=listings,
                                min_price=min_price, max_price=max_price, condition=condition, sort=sort)
     except Exception as e:
-        flash(f"❌ Error loading category: {e}", "error")
-        return redirect(url_for("home"))
+        app.logger.exception("Error loading category page")
+        # Keep the user on the category page and show an error rather than redirecting away
+        flash("❌ Error loading category. Please try again.", "error")
+        return render_template("category.html", category=cat, total=0, listings=[],
+                               min_price=min_price, max_price=max_price, condition=condition, sort=sort)
 
 # ---------- Helper routines for conversations/messages ----------
 
