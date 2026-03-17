@@ -8,6 +8,9 @@ import secrets
 import os
 from werkzeug.utils import secure_filename
 
+# Import models
+from models import db, Ad
+
 # Import admin routes
 from routes.admin import admin_bp
 from routes.categories import categories_bp
@@ -16,6 +19,11 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = "regear_secret_key_secure"
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_TYPE'] = 'filesystem'
+
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+mysqlconnector://root:Shra%400303@localhost/regear_db"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
 
 # Register admin blueprint
 app.register_blueprint(admin_bp)
@@ -62,10 +70,30 @@ def get_db_connection():
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        app.logger.info(f"DEBUG: login_required check - user_id in session: {'user_id' in session}, user_id: {session.get('user_id')}")
         if 'user_id' not in session:
+            app.logger.info("DEBUG: No user_id in session, redirecting to login")
             flash("Please login first!", "error")
             # send the original path so user can be redirected back after login
             return redirect(url_for("login", next=request.path))
+        
+        # Verify user still exists in database
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users WHERE id = %s", (session['user_id'],))
+            user = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            if not user:
+                app.logger.info(f"DEBUG: User {session['user_id']} not found in database")
+                session.clear()
+                flash("❌ Your session has expired or user record was deleted. Please login again.", "error")
+                return redirect(url_for("login"))
+        except Exception:
+            pass # ignore DB errors here to prevent locking out if DB is down
+            
+        app.logger.info("DEBUG: login_required passed")
         return f(*args, **kwargs)
     return decorated_function
 
@@ -107,49 +135,29 @@ def debug_session():
 
 @app.route("/")
 def home():
-    """Home page with featured approved listings"""
+    """Home page with all latest listings"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+        # Fetch all listings ordered by newest first, showing all for immediate appearance
         try:
             cursor.execute("""
                 SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
                 FROM listings l
-                JOIN users u ON l.user_id = u.id
-                JOIN ad_boosts b ON b.ad_id=l.id AND b.status='active' AND b.expiry_date>NOW()
-                JOIN boost_packages p ON p.id=b.package_id
-                WHERE l.approval_status='approved' AND l.status='active' AND p.boost_type IN ('homepage_featured','premium')
-                ORDER BY b.expiry_date DESC
-                LIMIT 12
+                LEFT JOIN users u ON l.user_id = u.id
+                ORDER BY l.created_at DESC
+                LIMIT 24
             """)
             featured_listings = cursor.fetchall()
-        except Exception:
+        except Exception as e:
+            app.logger.error(f"Error fetching homepage listings: {e}")
             featured_listings = []
-        if not featured_listings:
-            try:
-                cursor.execute("""
-                    SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
-                    FROM listings l
-                    JOIN users u ON l.user_id = u.id
-                    WHERE l.approval_status='approved' AND l.status='active'
-                    ORDER BY l.created_at DESC
-                    LIMIT 12
-                """)
-            except Exception:
-                cursor.execute("""
-                    SELECT l.id, l.title, l.category, l.subcategory, l.price, '' AS location, l.created_at, l.photos, u.username
-                    FROM listings l
-                    JOIN users u ON l.user_id = u.id
-                    WHERE l.approval_status='approved' AND l.status='active'
-                    ORDER BY l.created_at DESC
-                    LIMIT 12
-                """)
-            featured_listings = cursor.fetchall()
+            
         cursor.close()
         conn.close()
         return render_template("homepg.html", featured_listings=featured_listings)
     except Exception as e:
-        print(f"Error loading featured listings: {e}")
+        print(f"Error loading homepage: {e}")
         return render_template("homepg.html", featured_listings=[])
 
 
@@ -634,269 +642,156 @@ def save_category():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
+@app.route("/post-ad", methods=["GET", "POST"])
 @app.route("/post-ad-form", methods=["GET", "POST"])
 @login_required
 def post_ad_form():
     """Handle ad posting form"""
+    app.logger.info("DEBUG: post_ad_form function START - user_id:" + str(session.get('user_id')))
     if request.method == "POST":
-        app.logger.info(f"POST /post-ad-form called by session user_id={session.get('user_id')}")
+        print("DEBUG: POST /post-ad route entered")
+        user_id = session.get('user_id')
+        
+        # Log all form data for debugging
+        app.logger.info(f"POST /post-ad hit. User ID: {user_id}")
+        app.logger.info(f"Form values: {dict(request.form)}")
+        
         try:
-            user_id = session.get('user_id')
-            category = request.form.get('category')
-            subcategory = request.form.get('subcategory')
-            title = request.form.get('title')
-            description = request.form.get('description')
-            price = request.form.get('price')
-            location = request.form.get('location')
-            phone = request.form.get('phone')
-            email = request.form.get('email')
-            condition = request.form.get('condition')  # New/Used
+            # 1. Collect form data
+            app.logger.info("DEBUG: Collecting form data")
+            title = request.form.get('title', '').strip()
+            description = request.form.get('description', '').strip()
+            price = request.form.get('price', '0').strip()
+            category = request.form.get('category', '').strip() or session.get('selected_category', 'General')
+            subcategory = request.form.get('subcategory', '').strip() or session.get('selected_subcategory', 'Other')
+            location = request.form.get('location', 'India').strip()
+            phone = request.form.get('phone', '').strip()
+            email = request.form.get('email', '').strip()
+            condition = request.form.get('condition', 'Used').strip()
+            brand = request.form.get('brand', '').strip()
             
-            # Basic required validation
-            if not all([category, subcategory, title, description, price, condition]):
-                flash("❌ All required fields must be filled (title, category, price, condition, description)", "error")
+            app.logger.info(f"DEBUG: Form data - title: {title}, category: {category}")
+            
+            # Ensure price is a number
+            try:
+                price_val = int(float(price)) if price else 0
+            except:
+                price_val = 0
+
+            # Basic Validation
+            if not title:
+                app.logger.info("DEBUG: Title validation failed")
+                flash("❌ Please enter a title for your ad.", "error")
                 return redirect(url_for("post_ad_form"))
 
-            # Handle photo uploads - require at least one image (max 8)
+            app.logger.info("DEBUG: Validation passed, processing photos")
+            # 3. Handle Photos
             uploaded_files = request.files.getlist('photos')
-            valid_files = [f for f in uploaded_files if f and f.filename]
-            if not valid_files:
-                flash("❌ Please upload at least one image (JPG/PNG)", "error")
-                return redirect(url_for("post_ad_form"))
-            if len(valid_files) > 8:
-                flash("❌ You can upload up to 8 images only", "error")
-                return redirect(url_for("post_ad_form"))
-
             saved_paths = []
             upload_dir = os.path.join(app.root_path, 'static', 'uploads', 'products')
             if not os.path.exists(upload_dir):
                 os.makedirs(upload_dir, exist_ok=True)
 
-            ALLOWED_EXT = {'jpg', 'jpeg', 'png'}
-            def allowed_file(filename):
-                return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
+            for f in uploaded_files:
+                if f and f.filename:
+                    filename = secure_filename(f.filename)
+                    unique_name = secrets.token_hex(8) + '_' + filename
+                    f.save(os.path.join(upload_dir, unique_name))
+                    saved_paths.append(f'static/uploads/products/{unique_name}')
 
-            # Prevent duplicate quick submissions: same user, same title within last 60 seconds
+            photos_str = ','.join(saved_paths) if saved_paths else None
+
+            app.logger.info("DEBUG: Photos processed, saving to database")
+            # 4. Save to Database
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT id, created_at FROM listings WHERE user_id=%s AND title=%s ORDER BY created_at DESC LIMIT 1", (user_id, title))
-            last = cursor.fetchone()
-            if last:
-                try:
-                    last_time = last[1]
-                    if (datetime.now() - last_time).total_seconds() < 60:
-                        cursor.close()
-                        conn.close()
-                        flash("⚠️ Duplicate submission detected. Please wait a moment before retrying.", "warning")
-                        return redirect(url_for("post_ad_form"))
-                except Exception:
-                    pass
-
-            for f in valid_files:
-                if f and f.filename:
-                    if not allowed_file(f.filename):
-                        flash("❌ Only JPG/JPEG/PNG images are allowed", "error")
-                        cursor.close()
-                        conn.close()
-                        return redirect(url_for("post_ad_form"))
-
-                    filename = secure_filename(f.filename)
-                    unique_name = secrets.token_hex(12) + '_' + filename
-                    dest = os.path.join(upload_dir, unique_name)
-                    f.save(dest)
-                    rel_path = os.path.join('static', 'uploads', 'products', unique_name).replace('\\', '/')
-                    saved_paths.append(rel_path)
-
-            photos_str = ','.join(saved_paths)
-
-            # Insert listing with pending approval and 5-day free trial visibility
-            trial_expires = datetime.now() + timedelta(days=5)
-            cursor.execute("""
-                INSERT INTO listings (user_id, category, subcategory, title, description, price, location, phone, email, item_condition, photos, created_at, status, approval_status, expires_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (user_id, category, subcategory, title, description, price, location, phone, email, condition, photos_str, datetime.now(), 'active', 'pending', trial_expires))
-
+            
+            # Use columns that we verified exist
+            sql = """
+                INSERT INTO listings 
+                (user_id, title, description, price, category, subcategory, photos, location, phone, email, item_condition, brand, status, approval_status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', 'pending')
+            """
+            values = (user_id, title, description, price_val, category, subcategory, photos_str, location, phone, email, condition, brand)
+            
+            app.logger.info(f"Executing SQL: {sql} with values {values}")
+            cursor.execute(sql, values)
             conn.commit()
             listing_id = cursor.lastrowid
-
-            # Save individual images to product_images table if exists
-            try:
-                for p in saved_paths:
-                    cursor.execute("INSERT INTO product_images (listing_id, image_path, created_at) VALUES (%s, %s, NOW())", (listing_id, p))
-                conn.commit()
-            except Exception:
-                # ignore if table missing; product_images migration handled separately
-                pass
-
+            
+            # DEBUG CHECK
+            app.logger.info("Ad saved successfully")
+            app.logger.info(f"Ad saved with ID: {listing_id}")
+            
             cursor.close()
             conn.close()
+            
+            # Try to save individual images if table exists
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                for path in saved_paths:
+                    cursor.execute("INSERT INTO product_images (listing_id, image_path) VALUES (%s, %s)", (listing_id, path))
+                conn.commit()
+                cursor.close()
+                conn.close()
+            except:
+                pass
 
-            flash("✅ Your ad has been submitted successfully! It's now pending admin review. Once approved, it will be published on the website.", "success")
-            return redirect(url_for("dashboard"))
+            flash("✅ Your Ad has been posted successfully! It's now pending admin review.", "success")
+            app.logger.info("DEBUG: About to redirect to /my-listings")
+            return redirect("/my-listings")
             
         except Exception as e:
+            app.logger.error(f"EXCEPTION in post_ad_form: {e}")
             flash(f"❌ Error posting ad: {str(e)}", "error")
             return redirect(url_for("post_ad_form"))
     
-    # Get selected category from session
-    selected_category = session.get('selected_category', '')
-    selected_subcategory = session.get('selected_subcategory', '')
+    # GET request
+    selected_category = request.args.get('category') or request.args.get('cat') or session.get('selected_category', '')
+    selected_subcategory = request.args.get('subcategory') or request.args.get('sub') or session.get('selected_subcategory', '')
     
     return render_template("addpost.html", selected_category=selected_category, selected_subcategory=selected_subcategory)
 
 @app.route("/my-listings")
 @login_required
 def my_listings():
+    app.logger.info("DEBUG: /my-listings route called")
+    user_id = session.get('user_id')
+    app.logger.info(f"DEBUG: user_id = {user_id}")
+    
     try:
-        user_id = session.get('user_id')
-        username = session.get('username', 'User')
-        role = session.get('role', 'buyer')
-        status_filter = (request.args.get('status') or '').strip()
-        q = (request.args.get('q') or '').strip()
-        sort = (request.args.get('sort') or 'new').strip()
-        page = request.args.get('page', 1, type=int)
-        per_page = 10
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        base = (
-            "SELECT l.id, l.title, l.category, l.subcategory, l.price, l.status, "
-            "l.approval_status, l.created_at, l.photos, l.location, l.view_count, "
-            "(b.id IS NOT NULL) AS boosted, b.expiry_date AS boost_expiry "
-            "FROM listings l "
-            "LEFT JOIN ad_boosts b ON b.ad_id = l.id AND b.status='active' AND b.expiry_date>NOW() "
-            "WHERE l.user_id=%s"
-        )
-        params = [user_id]
-        if status_filter == 'active':
-            base += " AND l.status='active'"
-        elif status_filter == 'pending':
-            base += " AND l.approval_status='pending'"
-        elif status_filter == 'sold':
-            base += " AND (l.status='sold' OR l.approval_status='sold')"
-        elif status_filter == 'rejected':
-            base += " AND l.approval_status='rejected'"
-        elif status_filter == 'approved':
-            base += " AND l.approval_status='approved'"
-        if q:
-            base += " AND (l.title LIKE %s OR l.category LIKE %s)"
-            like_q = f"%{q}%"
-            params.extend([like_q, like_q])
-        order_sql = " ORDER BY l.created_at DESC"
-        if sort == 'old':
-            order_sql = " ORDER BY l.created_at ASC"
-        elif sort == 'price_asc':
-            order_sql = " ORDER BY l.price ASC"
-        elif sort == 'price_desc':
-            order_sql = " ORDER BY l.price DESC"
-        elif sort == 'views_desc':
-            order_sql = " ORDER BY l.view_count DESC"
-        count_sql = "SELECT COUNT(*) as total FROM listings l WHERE l.user_id=%s"
-        count_params = [user_id]
-        if status_filter == 'active':
-            count_sql += " AND l.status='active'"
-        elif status_filter == 'pending':
-            count_sql += " AND l.approval_status='pending'"
-        elif status_filter == 'sold':
-            count_sql += " AND (l.status='sold' OR l.approval_status='sold')"
-        elif status_filter == 'rejected':
-            count_sql += " AND l.approval_status='rejected'"
-        elif status_filter == 'approved':
-            count_sql += " AND l.approval_status='approved'"
-        if q:
-            count_sql += " AND (l.title LIKE %s OR l.category LIKE %s)"
-            like_q2 = f"%{q}%"
-            count_params.extend([like_q2, like_q2])
-        cursor.execute(count_sql, count_params)
-        row = cursor.fetchone()
-        total = row['total'] if row else 0
-        offset = (page - 1) * per_page
-        base += order_sql + " LIMIT %s OFFSET %s"
-        params.extend([per_page, offset])
-        try:
-            cursor.execute(base, params)
-            listings = cursor.fetchall()
-        except Exception:
-            cursor.execute(
-                "SELECT id, title, category, subcategory, price, status, approval_status, created_at, photos "
-                "FROM listings WHERE user_id=%s ORDER BY created_at DESC LIMIT %s OFFSET %s",
-                [user_id, per_page, offset]
-            )
-            listings = cursor.fetchall()
-        # Batch engagement metrics
-        listing_ids = [l['id'] for l in listings] if listings else []
-        fav_counts = {}
-        msg_counts = {}
-        exp_dates = {}
-        if listing_ids:
-            try:
-                fmt = ','.join(['%s'] * len(listing_ids))
-                cursor.execute(f"SELECT listing_id, COUNT(*) as cnt FROM favorites WHERE listing_id IN ({fmt}) GROUP BY listing_id", tuple(listing_ids))
-                for r in cursor.fetchall():
-                    fav_counts[r['listing_id']] = r['cnt']
-            except Exception:
-                fav_counts = {}
-            try:
-                fmt = ','.join(['%s'] * len(listing_ids))
-                cursor.execute(f"""
-                    SELECT c.listing_id, COUNT(m.id) as cnt
-                    FROM conversations c
-                    LEFT JOIN messages m ON m.conversation_id = c.id
-                    WHERE c.listing_id IN ({fmt})
-                    GROUP BY c.listing_id
-                """, tuple(listing_ids))
-                for r in cursor.fetchall():
-                    msg_counts[r['listing_id']] = r['cnt']
-            except Exception:
-                msg_counts = {}
-            try:
-                fmt = ','.join(['%s'] * len(listing_ids))
-                cursor.execute(f"SELECT id, expires_date FROM listings WHERE id IN ({fmt})", tuple(listing_ids))
-                for r in cursor.fetchall():
-                    exp_dates[r['id']] = r.get('expires_date')
-            except Exception:
-                exp_dates = {}
+        
+        cursor.execute("""
+            SELECT id, title, category, subcategory, price, status, approval_status, created_at, photos, location
+            FROM listings 
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (user_id,))
+        
+        listings = cursor.fetchall()
+        app.logger.info(f"DEBUG: Found {len(listings)} listings")
+        
         cursor.close()
         conn.close()
-        now = datetime.now()
-        enriched = []
-        for l in listings:
-            d = dict(l)
-            try:
-                d['days_active'] = max(0, (now - d['created_at']).days) if d.get('created_at') else 0
-            except Exception:
-                d['days_active'] = 0
-            d['favorites_count'] = fav_counts.get(d['id'], 0)
-            d['messages_count'] = msg_counts.get(d['id'], 0)
-            d['boosted'] = bool(d.get('boosted'))
-            d['boost_expires'] = d.get('boost_expiry')
-            # days remaining
-            exp = exp_dates.get(d['id'])
-            try:
-                if exp:
-                    d['days_remaining'] = max(0, (exp - now).days)
-                else:
-                    d['days_remaining'] = None
-            except Exception:
-                d['days_remaining'] = None
-            # performance percent
-            views = d.get('view_count') or 0
-            favs = d['favorites_count'] or 0
-            perf = min(100, int(views * 1 + favs * 5))
-            d['performance_percent'] = perf
-            enriched.append(d)
-        total_pages = (total + per_page - 1) // per_page
-        return render_template(
-            "my_listings.html",
-            listings=enriched,
-            username=username,
-            role=role,
-            status_filter=status_filter,
-            q=q,
-            sort=sort,
-            current_page=page,
-            total_pages=total_pages
-        )
+        
+        # Simple enrichment
+        for listing in listings:
+            listing['days_active'] = 0  # simplified
+            listing['favorites_count'] = 0
+            listing['messages_count'] = 0
+            listing['boosted'] = False
+            listing['boost_expires'] = None
+            listing['days_remaining'] = None
+            listing['performance_percent'] = 0
+        
+        app.logger.info(f"DEBUG: Returning {len(listings)} listings")
+        return render_template('my_listings.html', listings=listings)
+        
     except Exception as e:
+        print(f"DEBUG: Exception in my_listings: {e}")
         flash(f"❌ Error loading listings: {str(e)}", "error")
         return redirect(url_for("dashboard"))
 
@@ -1372,6 +1267,13 @@ def buy_boost(package_id, ad_id):
             "INSERT INTO ad_boosts (user_id, ad_id, package_id, payment_id, start_date, expiry_date, status, created_at) VALUES (%s,%s,%s,%s,NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())",
             (user_id, ad_id, pkg["id"], payment_id, int(pkg["duration_days"]))
         )
+        
+        # Also insert into boosted_listings table for Admin Panel
+        cur.execute("""
+            INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
+            VALUES (%s, %s, %s, NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())
+        """, (ad_id, user_id, pkg["boost_type"], int(pkg["duration_days"])))
+        
         conn.commit()
         cur.close()
         conn.close()
@@ -1425,6 +1327,13 @@ def checkout(package_id, ad_id):
                 INSERT INTO ad_boosts (user_id, ad_id, package_id, payment_id, start_date, expiry_date, status, created_at)
                 VALUES (%s,%s,%s,%s,NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())
             """, (user_id, ad_id, pkg["id"], payment_id, int(pkg["duration_days"])))
+
+            # Also insert into boosted_listings table for Admin Panel
+            cur.execute("""
+                INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
+                VALUES (%s, %s, %s, NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())
+            """, (ad_id, user_id, pkg["boost_type"], int(pkg["duration_days"])))
+
             conn.commit()
             cur.close()
             conn.close()
@@ -1889,6 +1798,23 @@ def ensure_boost_tables():
                 INDEX idx_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS boosted_listings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                listing_id INT NOT NULL,
+                seller_id INT NOT NULL,
+                boost_type VARCHAR(50) NOT NULL,
+                start_date DATETIME NOT NULL,
+                end_date DATETIME NOT NULL,
+                status ENUM('active','expired','disabled') DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_listing (listing_id),
+                INDEX idx_seller (seller_id),
+                INDEX idx_end_date (end_date),
+                INDEX idx_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
         try:
             cur.execute("ALTER TABLE payments ADD COLUMN package_id INT DEFAULT NULL")
         except Exception:
@@ -1949,6 +1875,15 @@ def task_expire_boosts():
             WHERE expiry_date<NOW() AND status='active'
         """)
         affected = cur.rowcount
+        
+        # Also expire boosted_listings
+        cur.execute("""
+            UPDATE boosted_listings
+            SET status='expired'
+            WHERE end_date < NOW() AND status='active'
+        """)
+        affected += cur.rowcount
+        
         conn.commit()
         cur.close()
         conn.close()

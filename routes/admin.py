@@ -161,30 +161,61 @@ def dashboard():
 @admin_bp.route("/boosted")
 @admin_required
 def boosted_listings():
-    """Manage boosted/promotion listings"""
+    """Manage boosted/promotion listings from boosted_listings table"""
     records = []
     try:
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        try:
-            cur.execute("""
-                SELECT b.id, b.ad_id as listing_id, b.user_id, p.boost_type, p.price, p.duration_days,
-                       b.start_date as start_date, b.expiry_date as end_date,
-                       l.title, u.username
-                FROM ad_boosts b
-                JOIN boost_packages p ON p.id=b.package_id
-                JOIN listings l ON b.ad_id = l.id
-                JOIN users u ON b.user_id = u.id
-                ORDER BY b.start_date DESC
-            """)
-        except Exception:
-            cur.execute("SELECT 0 id, 0 listing_id, 0 user_id, '' boost_type, 0 price, 0 duration_days, NOW() start_date, NOW() end_date, '' title, '' username WHERE 1=0")
+        # Fetch from boosted_listings table as requested
+        cur.execute("""
+            SELECT bl.id, bl.listing_id, bl.seller_id, bl.boost_type, 
+                   bl.start_date, bl.end_date, bl.status,
+                   COALESCE(l.title, 'Deleted Listing') as title, 
+                   COALESCE(u.username, 'Unknown Seller') as username
+            FROM boosted_listings bl
+            LEFT JOIN listings l ON bl.listing_id = l.id
+            LEFT JOIN users u ON bl.seller_id = u.id
+            ORDER BY bl.start_date DESC
+        """)
         records = cur.fetchall()
         cur.close()
         conn.close()
-    except Exception:
+    except Exception as e:
+        app.logger.error(f"Error fetching boosted listings: {e}")
         records = []
     return render_template("admin/admin_boosted.html", records=records)
+
+@admin_bp.route("/boosted/disable/<int:boost_id>", methods=["POST"])
+@admin_required
+def disable_boost(boost_id):
+    """Disable a boosted listing"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE boosted_listings SET status='disabled' WHERE id=%s", (boost_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("✅ Boost disabled successfully", "success")
+    except Exception as e:
+        flash(f"❌ Error disabling boost: {e}", "error")
+    return redirect(url_for("admin.boosted_listings"))
+
+@admin_bp.route("/boosted/extend/<int:boost_id>", methods=["POST"])
+@admin_required
+def extend_boost(boost_id):
+    """Extend a boosted listing by 7 days"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE boosted_listings SET end_date = DATE_ADD(end_date, INTERVAL 7 DAY), status='active' WHERE id=%s", (boost_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("✅ Boost extended by 7 days", "success")
+    except Exception as e:
+        flash(f"❌ Error extending boost: {e}", "error")
+    return redirect(url_for("admin.boosted_listings"))
 
 @admin_bp.route("/boosted-ads")
 @admin_required
@@ -866,8 +897,10 @@ def manage_products():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # Using LEFT JOIN so that listings show up even if the user record is missing
         base_select = ("SELECT l.id, l.title, l.price, l.approval_status, l.category, l.user_id, "
-                       "u.username, l.created_at FROM listings l JOIN users u ON l.user_id = u.id")
+                       "COALESCE(u.username, 'Deleted User') as username, l.created_at "
+                       "FROM listings l LEFT JOIN users u ON l.user_id = u.id")
         where_clauses = []
         params = []
 
@@ -876,22 +909,22 @@ def manage_products():
             params.append(status_filter)
 
         if search:
-            where_clauses.append("(l.title LIKE %s OR u.username LIKE %s)")
-            params.extend([f"%{search}%", f"%{search}%"])
+            where_clauses.append("(l.title LIKE %s OR u.username LIKE %s OR l.id LIKE %s)")
+            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
 
         where_sql = ''
         if where_clauses:
             where_sql = ' WHERE ' + ' AND '.join(where_clauses)
 
         # Get total count
-        count_query = "SELECT COUNT(*) as total FROM listings l JOIN users u ON l.user_id = u.id" + ((' WHERE ' + ' AND '.join(where_clauses)) if where_clauses else '')
+        count_query = "SELECT COUNT(*) as total FROM listings l LEFT JOIN users u ON l.user_id = u.id" + ((' WHERE ' + ' AND '.join(where_clauses)) if where_clauses else '')
         cursor.execute(count_query, params)
         row = cursor.fetchone()
         total = row['total'] if row else 0
 
         # Get paginated results
         offset = (page - 1) * items_per_page
-        select_query = base_select + where_sql + " ORDER BY FIELD(l.approval_status, 'pending', 'rejected', 'approved', 'sold'), l.created_at DESC LIMIT %s OFFSET %s"
+        select_query = base_select + where_sql + " ORDER BY FIELD(l.approval_status, 'pending', 'rejected', 'approved', 'sold'), l.id DESC LIMIT %s OFFSET %s"
         exec_params = params + [items_per_page, offset]
         cursor.execute(select_query, exec_params)
         products = cursor.fetchall()

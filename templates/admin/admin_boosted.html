@@ -35,14 +35,26 @@
                         </td>
                         <td>{{ r.username }}</td>
                         <td><span class="badge bg-primary">{{ r.boost_type|capitalize }}</span></td>
-                        <td><small>{{ r.start_date }}</small></td>
-                        <td><small>{{ r.end_date or '-' }}</small></td>
-                        <td>₹{{ r.price or 0 }}</td>
+                        <td><small>{{ r.start_date.strftime('%Y-%m-%d') if r.start_date else '-' }}</small></td>
+                        <td><small>{{ r.end_date.strftime('%Y-%m-%d') if r.end_date else '-' }}</small></td>
+                        <td>
+                            {% if r.status == 'active' %}
+                                <span class="badge bg-success">Active</span>
+                            {% elif r.status == 'disabled' %}
+                                <span class="badge bg-danger">Disabled</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ r.status|capitalize }}</span>
+                            {% endif %}
+                        </td>
                         <td class="text-end">
                             <div class="btn-group btn-group-sm">
                                 <a class="btn btn-outline-primary" href="{{ url_for('view_listing', listing_id=r.listing_id) }}" target="_blank">View</a>
-                                <button class="btn btn-outline-warning" disabled>Extend</button>
-                                <button class="btn btn-outline-danger" disabled>Cancel</button>
+                                <form action="{{ url_for('admin.extend_boost', boost_id=r.id) }}" method="POST" style="display:inline;">
+                                    <button type="submit" class="btn btn-outline-warning" onclick="return confirm('Extend this boost by 7 days?')">Extend</button>
+                                </form>
+                                <form action="{{ url_for('admin.disable_boost', boost_id=r.id) }}" method="POST" style="display:inline;">
+                                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Are you sure you want to disable this boost?')">Disable</button>
+                                </form>
                             </div>
                         </td>
                     </tr>

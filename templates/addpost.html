@@ -318,7 +318,19 @@
                     <strong id="successText"></strong>
                 </div>
 
-                <form id="postAdForm" method="POST" action="{{ url_for('post_ad_form') }}" enctype="multipart/form-data">
+                <!-- FLASH MESSAGES -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else 'warning' if category == 'warning' else 'success' }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <form id="postAdForm" method="POST" action="/post-ad" enctype="multipart/form-data">
                     <!-- SECTION 1: CATEGORY & DETAILS -->
                     <div class="form-section">
                         <div class="section-title">
@@ -342,7 +354,7 @@
                         <!-- BRAND/COMPANY SELECTOR -->
                         <div class="mb-4" id="brandSelectorContainer" style="display: none;">
                             <label class="form-label">Brand/Company <span style="color: #ff4444;">*</span></label>
-                            <select class="form-select" id="brandSelector" name="brand" required>
+                            <select class="form-select" id="brandSelector" name="brand">
                                 <option value="">-- Select a Brand --</option>
                             </select>
                             <div class="form-text">Choose the brand/company of the product you're selling</div>
@@ -567,18 +579,26 @@
             let category = injectedCategory || '';
             let subcategory = injectedSubcategory || '';
 
+            const urlParams = new URLSearchParams(window.location.search);
             if (!category) {
-                const urlParams = new URLSearchParams(window.location.search);
                 category = urlParams.get('category') || '';
             }
             if (!subcategory) {
-                const urlParams = new URLSearchParams(window.location.search);
                 subcategory = urlParams.get('subcategory') || '';
             }
 
+            // Also check for 'cat' and 'sub' as fallbacks
+            if (!category) category = urlParams.get('cat') || '';
+            if (!subcategory) subcategory = urlParams.get('sub') || '';
+
             document.getElementById('primaryCategory').value = category || 'Not specified';
             document.getElementById('subCategory').value = subcategory || 'Not specified';
-            document.getElementById('categoryBreadcrumb').textContent = subcategory || 'Post Ad';
+            
+            // Set breadcrumb
+            const categoryBreadcrumb = document.getElementById('categoryBreadcrumb');
+            if (categoryBreadcrumb) {
+                categoryBreadcrumb.textContent = category || 'Category';
+            }
 
             // also populate hidden inputs for server submission
             document.getElementById('categoryInput').value = category || '';
@@ -595,6 +615,7 @@
             // Show brand selector for categories containing 'mobil'
             if (category && category.toLowerCase().includes('mobil')) {
                 brandSelectorContainer.style.display = 'block';
+                brandSelector.required = true;
                 
                 // Get current selected value to preserve it
                 const currentValue = brandSelector.value;
@@ -616,6 +637,7 @@
                 }
             } else {
                 brandSelectorContainer.style.display = 'none';
+                brandSelector.required = false;
             }
         }
 
@@ -685,11 +707,16 @@
                 return false;
             }
 
-            // copy visible category values to hidden inputs just before submit
-            const cat = document.getElementById('primaryCategory').value || '';
-            const sub = document.getElementById('subCategory').value || '';
-            document.getElementById('categoryInput').value = cat;
-            document.getElementById('subcategoryInput').value = sub;
+            // copy visible category values to hidden inputs just before submit IF they are not empty/Not specified
+            const catDisplay = document.getElementById('primaryCategory').value;
+            const subDisplay = document.getElementById('subCategory').value;
+            
+            if (catDisplay && catDisplay !== 'Not specified') {
+                document.getElementById('categoryInput').value = catDisplay;
+            }
+            if (subDisplay && subDisplay !== 'Not specified') {
+                document.getElementById('subcategoryInput').value = subDisplay;
+            }
             // ensure file input is synced with accumulator (for browsers that allow it)
             const fileInput = document.getElementById('fileInput');
             try {
@@ -709,11 +736,12 @@
             // Debug log to help diagnose non-submission
             console.log('Submitting Post Ad form, files:', dtAccumulator.files.length);
 
-            // disable submit button to prevent double-submits and show loading
+            // show loading on button but don't disable it immediately to avoid browser issues
             const submitBtn = document.querySelector('#postAdForm button[type="submit"]');
             if (submitBtn) {
-                submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Posting...';
+                // optional: disable after a short delay
+                setTimeout(() => { submitBtn.disabled = true; }, 100);
             }
 
             // allow native form submission to server
