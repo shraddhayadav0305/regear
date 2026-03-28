@@ -994,51 +994,35 @@ def category_page(category_slug):
         
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        
-        # 3. Get display name
-        display_name = cat_slug.replace('_', ' ').title()
-        try:
-            cursor.execute("SELECT name FROM categories WHERE slug = %s OR name = %s", (cat_slug, category_slug))
-            row = cursor.fetchone()
-            if row:
-                display_name = row['name']
-        except Exception:
-            pass
-
-        # 4. Fetch Listings
         query = """
-            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, l.view_count,
-                   CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos,
+                   CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted,
+                   b.expiry_date AS boost_expiry
             FROM listings l
             LEFT JOIN ad_boosts b ON b.ad_id=l.id AND b.status='active' AND b.expiry_date>NOW()
-            WHERE (l.approval_status='approved' OR l.approval_status='pending') 
-              AND l.status='active' 
-              AND (l.category = %s OR l.category = %s)
+            WHERE l.approval_status='approved' AND l.status='active' AND l.category=%s
         """
-        # Search for both slug and original just in case
-        params = [cat_slug, category_slug]
-        
-        if search:
-            query += " AND (l.title LIKE %s OR l.description LIKE %s)"
-            params.extend([f"%{search}%", f"%{search}%"])
-
+        params = [cat]
         if min_price is not None:
             query += " AND l.price >= %s"
             params.append(min_price)
         if max_price is not None:
             query += " AND l.price <= %s"
             params.append(max_price)
-            
-        # 5. Sorting
-        order_clause = " ORDER BY is_boosted DESC, l.created_at DESC"
-        if sort == 'price_low':
-            order_clause = " ORDER BY is_boosted DESC, l.price ASC"
-        elif sort == 'price_high':
-            order_clause = " ORDER BY is_boosted DESC, l.price DESC"
-        
+        if condition:
+            query += " AND (l.item_condition=%s OR l.condition=%s)"
+            params.extend([condition, condition])
+        order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.created_at DESC"
+        if sort == 'price_asc':
+            order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price ASC"
+        elif sort == 'price_desc':
+            order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price DESC"
         query += order_clause
-        
-        cursor.execute(query, params)
+        try:
+            cursor.execute(query, params)
+        except Exception:
+            query = query.replace("l.location", "'' AS location")
+            cursor.execute(query, params)
         listings = cursor.fetchall()
         
         total = len(listings)
@@ -1055,8 +1039,8 @@ def category_page(category_slug):
                                max_price=max_price, 
                                sort=sort)
     except Exception as e:
-        app.logger.error(f"FATAL ERROR in category_page: {e}")
-        return f"<h3>Error loading category: {str(e)}</h3><p>Original Slug: {category_slug}</p><p>Please go back to <a href='/'>Homepage</a></p>", 500
+        flash(f"❌ Error loading category: {e}", "error")
+        return redirect(url_for("home"))
 
 # ---------- Helper routines for conversations/messages ----------
 

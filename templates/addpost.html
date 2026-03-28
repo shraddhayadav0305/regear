@@ -573,8 +573,9 @@
         // Initialize page with category parameters (from session context passed by server)
         function initializePage() {
             // Values injected by Flask when rendering the template
-            const injectedCategory = `{{ selected_category | e }}`.trim();
-            const injectedSubcategory = `{{ selected_subcategory | e }}`.trim();
+            // Use JSON encoding so special characters (e.g. & ) are preserved correctly
+            const injectedCategory = {{ selected_category | tojson }}.trim();
+            const injectedSubcategory = {{ selected_subcategory | tojson }}.trim();
 
             let category = injectedCategory || '';
             let subcategory = injectedSubcategory || '';
