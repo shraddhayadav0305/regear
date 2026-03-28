@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complete Subscription Payment - ReGear</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+    .payment-container {
+        max-width: 700px;
+        margin: 2rem auto;
+        padding: 0 20px;
+    }
+
+    .payment-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .payment-header {
+        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .payment-header h1 {
+        margin: 0 0 1rem 0;
+        font-size: 2rem;
+    }
+
+    .payment-header p {
+        margin: 0;
+        opacity: 0.9;
+    }
+
+    .payment-body {
+        padding: 2rem;
+    }
+
+    .order-summary {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.8rem;
+        border-bottom: 1px solid #ecf0f1;
+    }
+
+    .summary-row:last-child {
+        border-bottom: none;
+    }
+
+    .summary-label {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .summary-value {
+        color: #666;
+    }
+
+    .summary-row.total {
+        font-size: 1.2rem;
+        border-bottom: 2px solid #3498db;
+        margin-top: 0.5rem;
+        padding-top: 0.8rem;
+    }
+
+    .summary-row.total .summary-label,
+    .summary-row.total .summary-value {
+        font-weight: 700;
+        color: #3498db;
+    }
+
+    .payment-method-section {
+        margin-bottom: 2rem;
+    }
+
+    .payment-method-section h3 {
+        font-size: 1.1rem;
+        color: #2c3e50;
+        margin-bottom: 1rem;
+        font-weight: 600;
+    }
+
+    .payment-methods {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .method-option {
+        padding: 1rem;
+        border: 2px solid #ecf0f1;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+        background: white;
+    }
+
+    .method-option:hover {
+        border-color: #3498db;
+        background: #f0f8ff;
+    }
+
+    .method-option input[type="radio"] {
+        display: none;
+    }
+
+    .method-option input[type="radio"]:checked + label {
+        color: #3498db;
+        font-weight: 600;
+    }
+
+    .method-option input[type="radio"]:checked ~ .method-icon {
+        color: #3498db;
+    }
+
+    .method-option.selected {
+        border-color: #3498db;
+        background: #f0f8ff;
+    }
+
+    .method-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+        transition: color 0.3s ease;
+    }
+
+    .method-label {
+        display: block;
+        font-weight: 500;
+        color: #2c3e50;
+    }
+
+    .terms-checkbox {
+        margin-bottom: 1.5rem;
+    }
+
+    .terms-checkbox input[type="checkbox"] {
+        margin-right: 0.5rem;
+    }
+
+    .terms-checkbox label {
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .terms-checkbox a {
+        color: #3498db;
+        text-decoration: none;
+    }
+
+    .payment-button {
+        width: 100%;
+        padding: 12px;
+        background: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.3s ease;
+    }
+
+    .payment-button:hover {
+        background: #229954;
+    }
+
+    .payment-button:disabled {
+        background: #bdc3c7;
+        cursor: not-allowed;
+    }
+
+    .info-box {
+        background: #d5f4e6;
+        border-left: 4px solid #27ae60;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+        color: #27511b;
+    }
+
+    .info-box strong {
+        color: #1e3a1f;
+    }
+
+    .back-button {
+        color: #3498db;
+        text-decoration: none;
+        margin-bottom: 1rem;
+        display: inline-block;
+        font-weight: 500;
+    }
+
+    .back-button:hover {
+        text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+        .payment-methods {
+            grid-template-columns: 1fr;
+        }
+
+        .payment-header h1 {
+            font-size: 1.5rem;
+        }
+
+        .payment-body {
+            padding: 1rem;
+        }
+    }
+</style>
+</head>
+<body>
+    <div class="payment-container">
+    <a href="{{ url_for('seller_packages') }}" class="back-button">← Back to Plans</a>
+
+    <div class="payment-card">
+        <!-- Header -->
+        <div class="payment-header">
+            <h1>💳 Complete Your Subscription</h1>
+            <p>One-time payment to activate your subscription</p>
+        </div>
+
+        <!-- Body -->
+        <div class="payment-body">
+            <!-- Order Summary -->
+            <div class="order-summary">
+                <div class="summary-row">
+                    <span class="summary-label">Plan Name</span>
+                    <span class="summary-value"><strong>{{ plan_name }}</strong></span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Boost Limit</span>
+                    <span class="summary-value"><strong>{{ ad_limit if ad_limit != -1 else 'Unlimited' }}</strong></span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Duration</span>
+                    <span class="summary-value"><strong>{{ duration_days }} days</strong></span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Price per Month/Year</span>
+                    <span class="summary-value"><strong>₹{{ price }}</strong></span>
+                </div>
+                <div class="summary-row total">
+                    <span class="summary-label">Total Amount</span>
+                    <span class="summary-value">₹{{ price }}</span>
+                </div>
+            </div>
+
+            <!-- Info Box -->
+            {% if notice_text %}
+            <div class="info-box">
+                ✅ {{ notice_text }}
+            </div>
+            {% endif %}
+            <div class="info-box">
+                ✅ <strong>Auto-renewal disabled:</strong> Your subscription is valid for {{ duration_days }} days. We'll notify you before renewal.
+            </div>
+
+            <!-- Payment Methods -->
+            <form method="POST" action="{{ url_for('process_subscription_payment') }}" id="paymentForm">
+                <div class="payment-method-section">
+                    <h3>📱 Select Payment Method</h3>
+                    <div class="payment-methods">
+                        <label class="method-option">
+                            <input type="radio" name="payment_method" value="upi" checked onChange="updateMethod(this)">
+                            <div class="method-icon">📱</div>
+                            <span class="method-label">UPI</span>
+                        </label>
+                        <label class="method-option">
+                            <input type="radio" name="payment_method" value="card" onChange="updateMethod(this)">
+                            <div class="method-icon">💳</div>
+                            <span class="method-label">Credit/Debit Card</span>
+                        </label>
+                        <label class="method-option">
+                            <input type="radio" name="payment_method" value="netbanking" onChange="updateMethod(this)">
+                            <div class="method-icon">🏦</div>
+                            <span class="method-label">Net Banking</span>
+                        </label>
+                        <label class="method-option">
+                            <input type="radio" name="payment_method" value="wallet" onChange="updateMethod(this)">
+                            <div class="method-icon">👛</div>
+                            <span class="method-label">Wallet</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Terms -->
+                <div class="terms-checkbox">
+                    <input type="checkbox" id="terms" name="terms" required>
+                    <label for="terms">
+                        I agree to the <a href="#" target="_blank">Terms of Service</a> and 
+                        <a href="#" target="_blank">Privacy Policy</a>
+                    </label>
+                </div>
+
+                <!-- Payment Button -->
+                <button type="submit" class="payment-button" id="payBtn">
+                    ✓ Pay ₹{{ price }} & Activate Subscription
+                </button>
+            </form>
+
+            <!-- Security Info -->
+            <div style="margin-top: 1.5rem; text-align: center; color: #999; font-size: 0.85rem;">
+                🔒 Your payment is secure and encrypted
+            </div>
+        </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div style="margin-top: 2rem; background: #f8f9fa; padding: 1.5rem; border-radius: 8px;">
+        <h3 style="color: #2c3e50; margin-top: 0;">❓ Payment Questions</h3>
+        <p style="color: #666; margin: 0.5rem 0;">
+            <strong>Will my payment process instantly?</strong><br>
+            Yes, your subscription will activate immediately after successful payment.
+        </p>
+        <p style="color: #666; margin: 0.5rem 0;">
+            <strong>Is there a refund policy?</strong><br>
+            Contact support within 7 days for a refund if unsatisfied.
+        </p>
+        <p style="color: #666; margin: 0;">
+            <strong>Can I cancel anytime?</strong><br>
+            Yes, you can cancel your subscription from your dashboard at any time.
+        </p>
+    </div>
+</div>
+
+<script>
+    function updateMethod(el) {
+        // Update UI to show selected method
+        document.querySelectorAll('.method-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        el.parentElement.classList.add('selected');
+    }
+
+    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+        if (!document.getElementById('terms').checked) {
+            e.preventDefault();
+            alert('Please agree to terms and conditions');
+            return false;
+        }
+        
+        const btn = document.getElementById('payBtn');
+        btn.disabled = true;
+        btn.textContent = 'Processing Payment...';
+    });
+
+    // Set initial selected state
+    document.addEventListener('DOMContentLoaded', function() {
+        const upiRadio = document.querySelector('input[value="upi"]');
+        if (upiRadio && upiRadio.checked) {
+            upiRadio.parentElement.classList.add('selected');
+        }
+    });
+</script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

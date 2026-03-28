@@ -1,37 +1,535 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment - ReGear</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {background:#f8f9fa;}
-        .payment-card {max-width:500px; margin:50px auto; background:white; border-radius:12px; padding:30px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}
-        .secure-badge {font-size:0.9rem; color:green;}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Payment - ReGear Marketplace</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 30px 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .payment-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .payment-header {
+      color: white;
+      text-align: center;
+      margin-bottom: 40px;
+      animation: slideDown 0.6s ease-out;
+    }
+
+    .payment-header h1 {
+      font-weight: 800;
+      font-size: 2.2rem;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .payment-header p {
+      font-size: 1rem;
+      opacity: 0.95;
+    }
+
+    .payment-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+
+    .order-summary {
+      background: white;
+      border-radius: 15px;
+      padding: 25px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      animation: fadeInLeft 0.7s ease-out;
+    }
+
+    .order-summary h3 {
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 20px;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .order-summary h3 i {
+      color: #667eea;
+      font-size: 1.4rem;
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .summary-item:last-child {
+      border-bottom: none;
+      padding-top: 20px;
+      padding-bottom: 0;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .summary-label {
+      color: #666;
+      font-weight: 500;
+    }
+
+    .summary-value {
+      color: #333;
+      font-weight: 600;
+    }
+
+    .plan-highlight {
+      background: linear-gradient(135deg, #667eea15, #764ba215);
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+
+    .plan-highlight .plan-name {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 5px;
+    }
+
+    .plan-highlight .plan-details {
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    .payment-methods {
+      background: white;
+      border-radius: 15px;
+      padding: 25px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      animation: fadeInRight 0.7s ease-out;
+    }
+
+    .payment-methods h3 {
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 20px;
+      border-bottom: 3px solid #764ba2;
+      padding-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .payment-methods h3 i {
+      color: #764ba2;
+      font-size: 1.4rem;
+    }
+
+    .method-option {
+      margin-bottom: 15px;
+    }
+
+    .method-option input[type="radio"] {
+      display: none;
+    }
+
+    .method-option label {
+      display: flex;
+      align-items: center;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: white;
+    }
+
+    .method-option input[type="radio"]:checked + label {
+      border-color: #667eea;
+      background: linear-gradient(135deg, #667eea15, #764ba215);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+    }
+
+    .method-option .method-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.2rem;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+
+    .method-option .method-info {
+      flex: 1;
+    }
+
+    .method-option .method-name {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 3px;
+    }
+
+    .method-option .method-desc {
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    .security-badge {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 12px 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .security-badge i {
+      color: #4caf50;
+      font-size: 1.3rem;
+    }
+
+    .security-badge span {
+      color: #2e7d32;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .payment-actions {
+      display: flex;
+      gap: 15px;
+      margin-top: 30px;
+    }
+
+    .btn-pay {
+      flex: 1;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .btn-pay:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+      color: white;
+    }
+
+    .btn-pay:active {
+      transform: translateY(0);
+    }
+
+    .btn-cancel {
+      flex: 0.5;
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+      padding: 15px 30px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .btn-cancel:hover {
+      background: #f5f5f5;
+      color: #667eea;
+    }
+
+    .trust-indicators {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 40px;
+      flex-wrap: wrap;
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: white;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .trust-item i {
+      font-size: 1.5rem;
+      color: #4caf50;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeInLeft {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes fadeInRight {
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .plan-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .payment-content {
+        grid-template-columns: 1fr;
+      }
+
+      .payment-header h1 {
+        font-size: 1.8rem;
+      }
+
+      .payment-actions {
+        flex-direction: column;
+      }
+
+      .btn-cancel {
+        flex: 1;
+      }
+
+      .trust-indicators {
+        gap: 15px;
+      }
+
+      .trust-item {
+        font-size: 0.85rem;
+      }
+    }
+  </style>
 </head>
 <body>
-<div class="payment-card">
-    <h3 class="mb-3">Confirm Payment</h3>
-    <p><strong>Plan:</strong> {{ plan_name }}</p>
-    <p><strong>Amount:</strong> ₹{{ amount }}</p>
-    <p><strong>GST (18%):</strong> ₹{{ gst }}</p>
-    <hr>
-    <p><strong>Total:</strong> ₹{{ total }}</p>
-    <p class="secure-badge"><i class="fas fa-lock"></i> 100% Secure Payment</p>
-    <form method="POST">
-        <div class="mb-3">
-            <label class="form-label">Payment Method</label>
-            <select name="payment_method" class="form-control">
-                <option value="UPI">UPI</option>
-                <option value="Card">Card</option>
-                <option value="Net Banking">Net Banking</option>
-            </select>
+  <div class="payment-container">
+    <!-- Header -->
+    <div class="payment-header">
+      <h1>💳 Secure Checkout</h1>
+      <p>Complete your boost purchase securely</p>
+    </div>
+
+    <div class="payment-content">
+      <!-- Order Summary -->
+      <div class="order-summary">
+        <h3><i class="fas fa-receipt"></i> Order Summary</h3>
+
+        {% if ad %}
+        <div class="plan-highlight">
+          <div class="plan-name">📍 {{ ad.title[:50] }}{% if ad.title|length > 50 %}...{% endif %}</div>
+          <div class="plan-details">Category: <strong>{{ ad.category }}</strong></div>
         </div>
-        <button type="submit" class="btn btn-primary w-100">Pay Now</button>
-    </form>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+        {% endif %}
+
+        <div class="summary-item">
+          <span class="summary-label">📦 Boost Plan</span>
+          <span class="summary-value">{{ plan_name }}</span>
+        </div>
+
+        <div class="summary-item">
+          <span class="summary-label">⏱️ Duration</span>
+          <span class="summary-value">{{ days }} days</span>
+        </div>
+
+        <div class="summary-item">
+          <span class="summary-label">📊 Visibility Boost</span>
+          <span class="summary-value">
+            {% if days == 3 %}
+              2x more views
+            {% elif days == 7 %}
+              4x more views
+            {% elif days == 15 %}
+              7x more views
+            {% elif days == 30 %}
+              10x more views
+            {% elif days == 45 %}
+              15x more views
+            {% elif days == 60 %}
+              20x more views
+            {% else %}
+              {{ (days|int / 3) | int }}x more views
+            {% endif %}
+          </span>
+        </div>
+
+        <div class="summary-item">
+          <span class="summary-label">💰 Total Amount</span>
+          <span class="summary-value">₹{{ price }}</span>
+        </div>
+
+        <div class="security-badge">
+          <i class="fas fa-lock"></i>
+          <span>Your payment is 100% secure & encrypted</span>
+        </div>
+      </div>
+
+      <!-- Payment Methods -->
+      <div class="payment-methods">
+        <h3><i class="fas fa-credit-card"></i> Payment Method</h3>
+
+        <form method="POST" action="{{ url_for('process_payment') }}">
+          <!-- Hidden fields for payment data -->
+          <input type="hidden" name="ad_id" value="{{ ad_id }}">
+          <input type="hidden" name="plan" value="{{ plan }}">
+          <input type="hidden" name="price" value="{{ price }}">
+          <input type="hidden" name="days" value="{{ days }}">
+          <input type="hidden" name="boost_priority" value="{{ boost_priority }}">
+          {% if is_featured %}<input type="hidden" name="is_featured" value="1">{% endif %}
+          {% if is_urgent %}<input type="hidden" name="is_urgent" value="1">{% endif %}
+
+          <!-- UPI Option -->
+          <div class="method-option">
+            <input type="radio" id="upi" name="payment_method" value="upi" checked>
+            <label for="upi">
+              <div class="method-icon">
+                <i class="fas fa-mobile-alt"></i>
+              </div>
+              <div class="method-info">
+                <div class="method-name">UPI Payment</div>
+                <div class="method-desc">Pay using Google Pay, PhonePe, Paytm, or BHIM</div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Card Option -->
+          <div class="method-option">
+            <input type="radio" id="card" name="payment_method" value="card">
+            <label for="card">
+              <div class="method-icon">
+                <i class="fas fa-credit-card"></i>
+              </div>
+              <div class="method-info">
+                <div class="method-name">Debit / Credit Card</div>
+                <div class="method-desc">Visa, Mastercard, American Express</div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Net Banking Option -->
+          <div class="method-option">
+            <input type="radio" id="netbanking" name="payment_method" value="netbanking">
+            <label for="netbanking">
+              <div class="method-icon">
+                <i class="fas fa-university"></i>
+              </div>
+              <div class="method-info">
+                <div class="method-name">Net Banking</div>
+                <div class="method-desc">All banks supported</div>
+              </div>
+            </label>
+          </div>
+
+          <div class="security-badge">
+            <i class="fas fa-shield-alt"></i>
+            <span>Payments powered by Razorpay - India's most trusted payment gateway</span>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="payment-actions">
+            <button type="submit" class="btn-pay">
+              <i class="fas fa-check-circle"></i>
+              Pay Now ₹{{ price }}
+            </button>
+            <a href="{{ url_for('my_listings') }}" class="btn-cancel">
+              <i class="fas fa-times"></i>
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Trust Indicators -->
+    <div class="trust-indicators">
+      <div class="trust-item">
+        <i class="fas fa-lock"></i>
+        SSL Secured
+      </div>
+      <div class="trust-item">
+        <i class="fas fa-check-circle"></i>
+        Instant Activation
+      </div>
+      <div class="trust-item">
+        <i class="fas fa-undo"></i>
+        Money-Back Guarantee
+      </div>
+      <div class="trust-item">
+        <i class="fas fa-headset"></i>
+        24/7 Support
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -45,6 +45,9 @@ def verify_password(stored_hash, password):
         # Fallback for plaintext passwords (for existing users)
         return stored_hash == hashlib.sha256(password.encode()).hexdigest() or stored_hash == password
 
+def slugify(text):
+    """Convert text to URL-friendly slug (lowercase, spaces to underscores)"""
+    return text.lower().replace(' ', '_').replace('&', 'and')
 
 # Database connection
 def get_db_connection():
@@ -142,7 +145,7 @@ def home():
         # Fetch all listings ordered by newest first, showing all for immediate appearance
         try:
             cursor.execute("""
-                SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username
+                SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, l.view_count, u.username
                 FROM listings l
                 LEFT JOIN users u ON l.user_id = u.id
                 ORDER BY l.created_at DESC
@@ -383,9 +386,21 @@ def reset_password():
 @user_required
 def dashboard():
     try:
+        from subscription_helpers import (
+            get_subscription_info, 
+            mark_expired_subscriptions
+        )
+        
         user_id = session.get('user_id')
         username = session.get('username', 'User')
         role = session.get('role', 'buyer')
+        
+        # Mark expired subscriptions
+        mark_expired_subscriptions(user_id)
+        
+        # Get subscription info
+        subscription_info = get_subscription_info(user_id)
+        
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
         # Stats
@@ -419,7 +434,7 @@ def dashboard():
         cur.close()
         conn.close()
         stats = {"active": active, "sold": sold, "expired": expired, "views": views}
-        return render_template("dashboard.html", username=username, role=role, stats=stats, recent_listings=recent_listings)
+        return render_template("dashboard.html", username=username, role=role, stats=stats, recent_listings=recent_listings, subscription=subscription_info)
     except Exception as e:
         flash(f"❌ Error loading dashboard: {str(e)}", "error")
         return redirect(url_for("login"))
@@ -494,6 +509,7 @@ def reverse_geocode():
 @app.route("/api/categories", methods=["GET"])
 def get_categories():
     """API endpoint to get categories from database with images"""
+    print("DEBUG: get_categories called")
     
     def create_svg_placeholder(cat_name, color):
         """Create SVG placeholder with category name"""
@@ -562,7 +578,8 @@ def get_categories():
                 'icon': cat['icon'],
                 'image': cat_image,
                 'id': cat_id,
-                'subcategories': [{'id': s['id'], 'name': s['name']} for s in subcats]
+                'slug': slugify(cat_name),
+                'subcategories': [{'id': s['id'], 'name': s['name'], 'slug': slugify(s['name'])} for s in subcats]
             }
         
         cursor.close()
@@ -756,42 +773,114 @@ def post_ad_form():
 @app.route("/my-listings")
 @login_required
 def my_listings():
-    app.logger.info("DEBUG: /my-listings route called")
+    """My Listings page with filtering, search, sorting, and pagination"""
     user_id = session.get('user_id')
-    app.logger.info(f"DEBUG: user_id = {user_id}")
+    
+    # Get query parameters
+    status_filter = request.args.get('status', '').strip()
+    search_query = request.args.get('q', '').strip()
+    sort_by = request.args.get('sort', 'new')
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
     
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
+        # Clean up expired boosts (auto-expiry logic)
         cursor.execute("""
-            SELECT id, title, category, subcategory, price, status, approval_status, created_at, photos, location
-            FROM listings 
-            WHERE user_id = %s
-            ORDER BY created_at DESC
+            UPDATE listings 
+            SET boost_priority = 0, is_featured = 0, is_urgent = 0, boost_type = NULL
+            WHERE user_id = %s AND boost_expires_date < NOW() AND boost_expires_date IS NOT NULL
         """, (user_id,))
+        conn.commit()
         
+        # Base query with boost info - priority-based sorting
+        base_query = """
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.status, l.approval_status, 
+                   l.created_at, l.photos, l.location, l.boost_type, l.boost_expires_date,
+                   l.boost_priority, l.is_featured, l.is_urgent, l.view_count,
+                   CASE WHEN l.boost_expires_date > NOW() THEN 1 ELSE 0 END AS is_boosted
+            FROM listings l
+            WHERE l.user_id = %s
+        """
+        params = [user_id]
+        
+        # Apply status filter
+        if status_filter:
+            base_query += " AND l.approval_status = %s"
+            params.append(status_filter)
+        
+        # Apply search filter
+        if search_query:
+            base_query += " AND (l.title LIKE %s OR l.category LIKE %s OR l.subcategory LIKE %s)"
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param])
+        
+        # Apply sorting with boost priority first
+        sort_clauses = {
+            'new': 'ORDER BY l.boost_priority DESC, l.is_featured DESC, l.is_urgent DESC, l.created_at DESC',
+            'old': 'ORDER BY l.boost_priority DESC, l.is_featured DESC, l.is_urgent DESC, l.created_at ASC',
+            'price_asc': 'ORDER BY l.boost_priority DESC, l.is_featured DESC, l.is_urgent DESC, l.price ASC',
+            'price_desc': 'ORDER BY l.boost_priority DESC, l.is_featured DESC, l.is_urgent DESC, l.price DESC',
+            'views_desc': 'ORDER BY l.boost_priority DESC, l.is_featured DESC, l.is_urgent DESC, l.view_count DESC'
+        }
+        order_clause = sort_clauses.get(sort_by, 'ORDER BY l.boost_priority DESC, l.is_featured DESC, l.is_urgent DESC, l.created_at DESC')
+        
+        # Get total count
+        count_query = f"SELECT COUNT(*) as total FROM listings l WHERE l.user_id = %s"
+        count_params = [user_id]
+        if status_filter:
+            count_query += " AND l.approval_status = %s"
+            count_params.append(status_filter)
+        if search_query:
+            count_query += " AND (l.title LIKE %s OR l.category LIKE %s OR l.subcategory LIKE %s)"
+            search_param = f"%{search_query}%"
+            count_params.extend([search_param, search_param, search_param])
+        
+        cursor.execute(count_query, count_params)
+        total = cursor.fetchone()['total']
+        total_pages = (total + per_page - 1) // per_page
+        
+        # Ensure page is valid
+        if page < 1:
+            page = 1
+        if page > total_pages and total_pages > 0:
+            page = total_pages
+        
+        # Calculate offset
+        offset = (page - 1) * per_page
+        
+        # Get paginated results
+        full_query = base_query + f" {order_clause} LIMIT %s OFFSET %s"
+        params.extend([per_page, offset])
+        
+        cursor.execute(full_query, params)
         listings = cursor.fetchall()
-        app.logger.info(f"DEBUG: Found {len(listings)} listings")
+        
+        # Enrich listings with additional info
+        for listing in listings:
+            listing['days_active'] = 0
+            listing['favorites_count'] = 0
+            listing['messages_count'] = 0
+            listing['days_remaining'] = None
+            listing['performance_percent'] = 0
         
         cursor.close()
         conn.close()
         
-        # Simple enrichment
-        for listing in listings:
-            listing['days_active'] = 0  # simplified
-            listing['favorites_count'] = 0
-            listing['messages_count'] = 0
-            listing['boosted'] = False
-            listing['boost_expires'] = None
-            listing['days_remaining'] = None
-            listing['performance_percent'] = 0
-        
-        app.logger.info(f"DEBUG: Returning {len(listings)} listings")
-        return render_template('my_listings.html', listings=listings)
+        return render_template('my_listings.html', 
+                             listings=listings,
+                             status_filter=status_filter,
+                             search_query=search_query,
+                             sort=sort_by,
+                             q=search_query,
+                             current_page=page,
+                             total_pages=total_pages,
+                             total=total)
         
     except Exception as e:
-        print(f"DEBUG: Exception in my_listings: {e}")
+        app.logger.error(f"Exception in my_listings: {str(e)}")
         flash(f"❌ Error loading listings: {str(e)}", "error")
         return redirect(url_for("dashboard"))
 
@@ -842,7 +931,7 @@ def browse():
         
         # Build dynamic query based on filters
         query = """
-            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, u.username,
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, l.view_count, u.username,
                    CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted,
                    b.expiry_date AS boost_expiry
             FROM listings l
@@ -889,55 +978,85 @@ def browse():
         flash(f"❌ Error loading listings: {str(e)}", "error")
         return redirect(url_for("home"))
 
-@app.route("/category/<path:category_name>")
-def category_page(category_name):
-    """Category landing page with filters and boosted-first sorting"""
-    cat = category_name
-    min_price = request.args.get('min_price', type=float)
-    max_price = request.args.get('max_price', type=float)
-    condition = request.args.get('condition', '').strip()
-    sort = request.args.get('sort', 'newest')  # newest | price_asc | price_desc
+@app.route("/category/<path:category_slug>")
+def category_page(category_slug):
+    """Category landing page with filters and boosted-first sorting using slugs"""
     try:
+        # 1. Standardize the slug
+        cat_slug = slugify(category_slug)
+        app.logger.info(f"DEBUG: Category Page Hit - Original: {category_slug}, Slug: {cat_slug}")
+        
+        # 2. Get all filter parameters
+        search = request.args.get('search', '').strip()
+        min_price = request.args.get('min_price', type=float)
+        max_price = request.args.get('max_price', type=float)
+        sort = request.args.get('sort', 'latest')
+        
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+        
+        # 3. Get display name
+        display_name = cat_slug.replace('_', ' ').title()
+        try:
+            cursor.execute("SELECT name FROM categories WHERE slug = %s OR name = %s", (cat_slug, category_slug))
+            row = cursor.fetchone()
+            if row:
+                display_name = row['name']
+        except Exception:
+            pass
+
+        # 4. Fetch Listings
         query = """
-            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos,
-                   CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted,
-                   b.expiry_date AS boost_expiry
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, l.view_count,
+                   CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted
             FROM listings l
             LEFT JOIN ad_boosts b ON b.ad_id=l.id AND b.status='active' AND b.expiry_date>NOW()
-            WHERE l.approval_status='approved' AND l.status='active' AND l.category=%s
+            WHERE (l.approval_status='approved' OR l.approval_status='pending') 
+              AND l.status='active' 
+              AND (l.category = %s OR l.category = %s)
         """
-        params = [cat]
+        # Search for both slug and original just in case
+        params = [cat_slug, category_slug]
+        
+        if search:
+            query += " AND (l.title LIKE %s OR l.description LIKE %s)"
+            params.extend([f"%{search}%", f"%{search}%"])
+
         if min_price is not None:
             query += " AND l.price >= %s"
             params.append(min_price)
         if max_price is not None:
             query += " AND l.price <= %s"
             params.append(max_price)
-        if condition:
-            query += " AND (l.item_condition=%s OR l.condition=%s)"
-            params.extend([condition, condition])
-        order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.created_at DESC"
-        if sort == 'price_asc':
-            order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price ASC"
-        elif sort == 'price_desc':
-            order_clause = " ORDER BY is_boosted DESC, boost_expiry DESC, l.price DESC"
+            
+        # 5. Sorting
+        order_clause = " ORDER BY is_boosted DESC, l.created_at DESC"
+        if sort == 'price_low':
+            order_clause = " ORDER BY is_boosted DESC, l.price ASC"
+        elif sort == 'price_high':
+            order_clause = " ORDER BY is_boosted DESC, l.price DESC"
+        
         query += order_clause
-        try:
-            cursor.execute(query, params)
-        except Exception:
-            query = query.replace("l.location", "'' AS location")
-            cursor.execute(query, params)
+        
+        cursor.execute(query, params)
         listings = cursor.fetchall()
+        
         total = len(listings)
         cursor.close()
         conn.close()
-        return render_template("category.html", category=cat, total=total, listings=listings,
-                               min_price=min_price, max_price=max_price, condition=condition, sort=sort)
+        
+        return render_template("category.html", 
+                               category=display_name, 
+                               category_slug=cat_slug, 
+                               total=total, 
+                               listings=listings,
+                               search=search,
+                               min_price=min_price, 
+                               max_price=max_price, 
+                               sort=sort)
     except Exception as e:
-        flash(f"❌ Error loading category: {e}", "error")
-        return redirect(url_for("home"))
+        app.logger.error(f"FATAL ERROR in category_page: {e}")
+        return f"<h3>Error loading category: {str(e)}</h3><p>Original Slug: {category_slug}</p><p>Please go back to <a href='/'>Homepage</a></p>", 500
 
 # ---------- Helper routines for conversations/messages ----------
 
@@ -1135,6 +1254,10 @@ def view_listing(listing_id):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
+        # Increment view count
+        cursor.execute("UPDATE listings SET view_count = view_count + 1 WHERE id = %s", (listing_id,))
+        conn.commit()
+        
         cursor.execute("""
             SELECT l.*, u.username, u.phone as seller_phone, u.email as seller_email,
                    u.created_at as seller_joined, u.profile_photo as seller_photo,
@@ -1192,42 +1315,170 @@ def product_page(product_id):
 def promotion_alias(product_id):
     return redirect(url_for('boost_listing', listing_id=product_id))
 
-@app.route("/boost/<int:listing_id>", methods=["GET","POST"])
+@app.route("/boost/<int:listing_id>", methods=["GET"])
 @login_required
 def boost_listing(listing_id):
+    """Display boost package selection page"""
     user_id = session.get('user_id')
+    
     try:
-        try:
-            ensure_boost_tables()
-        except Exception:
-            pass
         conn = get_db_connection()
-        cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT id, user_id, title, price, photos FROM listings WHERE id=%s", (listing_id,))
-        listing = cur.fetchone()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get listing details
+        cursor.execute("""
+            SELECT id, user_id, title, price, photos, category, subcategory, description
+            FROM listings
+            WHERE id = %s
+        """, (listing_id,))
+        
+        listing = cursor.fetchone()
+        
         if not listing:
-            cur.close()
-            conn.close()
             flash("❌ Listing not found", "error")
+            cursor.close()
+            conn.close()
             return redirect(url_for("my_listings"))
-        cur.execute("SELECT * FROM boost_packages ORDER BY price ASC")
-        rows = cur.fetchall()
-        packages = []
-        for p in rows:
-            key = "basic" if "basic" in (p["name"] or "").lower() else "featured" if "featured" in (p["name"] or "").lower() else "premium"
-            packages.append({
-                "id": p["id"],
-                "key": key,
-                "name": p["name"],
-                "days": int(p["duration_days"] or 0),
-                "price": float(p["price"] or 0.0)
-            })
-        cur.close()
+        
+        # Check ownership
+        if listing['user_id'] != user_id:
+            flash("❌ You can only boost your own listings", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("my_listings"))
+        
+        cursor.close()
         conn.close()
-        return render_template("boost_listing.html", listing=listing, packages=packages)
+        
+        return render_template("boost_packages.html", listing=listing)
+        
     except Exception as e:
-        flash(f"❌ Error loading boost options: {e}", "error")
+        app.logger.error(f"Error in boost_listing: {str(e)}")
+        flash(f"❌ Error loading boost packages: {str(e)}", "error")
         return redirect(url_for("my_listings"))
+
+
+@app.route("/apply-boost/<int:listing_id>", methods=["POST"])
+@login_required
+def apply_boost(listing_id):
+    """Apply boost to listing with support for 5-tier system and subscriptions"""
+    user_id = session.get('user_id')
+    
+    try:
+        from subscription_helpers import (
+            get_user_active_subscription, 
+            increment_subscription_boost_count,
+            mark_expired_subscriptions
+        )
+        
+        # Mark expired subscriptions first
+        mark_expired_subscriptions(user_id)
+        
+        days = int(request.form.get('days', 0))
+        price = float(request.form.get('price', 0))
+        boost_type = request.form.get('boost_type', 'standard')
+        boost_priority = int(request.form.get('boost_priority', 0))
+        is_featured = request.form.get('is_featured', '0') == '1'
+        is_urgent = request.form.get('is_urgent', '0') == '1'
+        
+        # Validate input
+        if days <= 0 or price <= 0:
+            flash("❌ Invalid boost package", "error")
+            return redirect(url_for("boost_listing", listing_id=listing_id))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verify listing ownership
+        cursor.execute("""
+            SELECT id, user_id FROM listings WHERE id = %s
+        """, (listing_id,))
+        
+        listing = cursor.fetchone()
+        
+        if not listing or listing['user_id'] != user_id:
+            flash("❌ Unauthorized action", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("my_listings"))
+        
+        # Check subscription limit
+        subscription = get_user_active_subscription(user_id)
+        subscription_id = None
+        
+        if subscription:
+            # User has active subscription
+            if subscription['ad_limit'] != -1:
+                # Check if limit reached
+                if subscription['ads_used'] >= subscription['ad_limit']:
+                    cursor.close()
+                    conn.close()
+                    flash(f"❌ You have reached your boost limit ({subscription['ad_limit']}/month). Upgrade your plan or wait for renewal.", "error")
+                    return redirect(url_for("boost_listing", listing_id=listing_id))
+            subscription_id = subscription['id']
+        
+        # Calculate boost end date
+        from datetime import datetime, timedelta
+        boost_until = datetime.now() + timedelta(days=days)
+        
+        # Update listing with comprehensive boost info
+        cursor.execute("""
+            UPDATE listings
+            SET boost_type = %s, boost_expires_date = %s, boost_priority = %s,
+                is_featured = %s, is_urgent = %s
+            WHERE id = %s
+        """, (boost_type, boost_until, boost_priority, 1 if is_featured else 0, 
+              1 if is_urgent else 0, listing_id))
+        
+        # Insert into ad_boosts table for tracking
+        cursor.execute("""
+            INSERT INTO ad_boosts (user_id, ad_id, subscription_id, status, start_date, expiry_date, created_at)
+            VALUES (%s, %s, %s, 'active', NOW(), %s, NOW())
+        """, (user_id, listing_id, subscription_id, boost_until))
+        
+        # If Featured or Super Boost, also insert into boosted_listings
+        if is_featured or boost_type == 'super':
+            cursor.execute("""
+                INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
+                VALUES (%s, %s, %s, NOW(), %s, 'active', NOW())
+            """, (listing_id, user_id, boost_type, boost_until))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Increment subscription boost count if applicable
+        if subscription_id:
+            increment_subscription_boost_count(user_id, subscription_id)
+        
+        # Get boost package name for feedback
+        boost_names = {
+            'basic': '🌱 Basic Boost',
+            'standard': '⭐ Standard Boost',
+            'popular': '👑 Popular Boost',
+            'advanced': '🚀 Advanced Boost',
+            'premium': '💎 Premium Boost',
+            'ultimate': '🏆 Ultimate Boost',
+            'starter': '🌱 Starter Boost',
+            'featured': '🌟 Featured Boost',
+            'super': '🔥 Super Boost'
+        }
+        boost_name = boost_names.get(boost_type, boost_type.capitalize() + ' Boost')
+        
+        if subscription:
+            remaining = subscription['ad_limit'] - (subscription['ads_used'] + 1) if subscription['ad_limit'] != -1 else -1
+            if remaining >= 0:
+                flash(f"✅ {boost_name} activated! Your ad will appear at the top. Remaining boosts: {remaining}/{subscription['ad_limit']}.", "success")
+            else:
+                flash(f"✅ {boost_name} activated! Your ad will appear at the top.", "success")
+        else:
+            flash(f"✅ {boost_name} activated! Your ad will appear at the top of all listings.", "success")
+        return redirect(url_for("my_listings"))
+        
+    except Exception as e:
+        app.logger.error(f"Error applying boost: {str(e)}")
+        flash(f"❌ Error applying boost: {str(e)}", "error")
+        return redirect(url_for("boost_listing", listing_id=listing_id))
 @app.route("/buy-boost/<int:package_id>/<int:ad_id>")
 @login_required
 def buy_boost(package_id, ad_id):
@@ -1349,11 +1600,442 @@ def checkout(package_id, ad_id):
             pass
         flash(f"❌ Error during checkout: {e}", "error")
         return redirect(url_for("boost_listing", listing_id=ad_id))
+
+# NEW PAYMENT FLOW ROUTES
+@app.route("/payment", methods=["GET", "POST"])
+@login_required
+def payment_page():
+    """Display payment page with order summary and payment method selection"""
+    user_id = session.get('user_id')
+    
+    try:
+        if request.method == "POST":
+            # Receive plan data from form submission
+            ad_id = request.form.get('ad_id')
+            plan = request.form.get('plan')
+            price = float(request.form.get('price', 0))
+            days = int(request.form.get('days', 0))
+            boost_priority = int(request.form.get('boost_priority', 0))
+            is_featured = request.form.get('is_featured') == '1'
+            is_urgent = request.form.get('is_urgent') == '1'
+            
+            # Validate
+            if not ad_id or not plan or price <= 0 or days <= 0:
+                flash("❌ Invalid payment data", "error")
+                return redirect(url_for("my_listings"))
+            
+            # Get ad details
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT id, user_id, title, category FROM listings WHERE id=%s
+            """, (ad_id,))
+            ad = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            if not ad or ad['user_id'] != user_id:
+                flash("❌ Unauthorized action", "error")
+                return redirect(url_for("my_listings"))
+            
+            # Plan names mapping with icons
+            plan_icons = {
+                'basic': '🌱',
+                'standard': '⭐',
+                'popular': '👑',
+                'advanced': '🚀',
+                'premium': '💎',
+                'ultimate': '🏆',
+                'starter': '🌱',
+                'featured': '🌟',
+                'super': '🔥'
+            }
+            
+            plan_labels = {
+                'basic': 'Basic',
+                'standard': 'Standard',
+                'popular': 'Popular',
+                'advanced': 'Advanced',
+                'premium': 'Premium',
+                'ultimate': 'Ultimate',
+                'starter': 'Starter',
+                'featured': 'Featured',
+                'super': 'Super'
+            }
+            
+            # Generate duration label
+            if days >= 30:
+                if days == 30:
+                    duration_label = "30 days"
+                elif days == 45:
+                    duration_label = "45 days"
+                elif days == 60:
+                    duration_label = "60 days"
+                else:
+                    duration_label = f"{days} days"
+            else:
+                duration_label = f"{days} days"
+            
+            # Generate plan name dynamically based on actual days
+            icon = plan_icons.get(plan, '')
+            label = plan_labels.get(plan, plan)
+            plan_name = f"{icon} {label} Boost ({duration_label})"
+            
+            # Store payment data in session
+            session['payment_data'] = {
+                'ad_id': ad_id,
+                'plan': plan,
+                'price': price,
+                'days': days,
+                'boost_priority': boost_priority,
+                'is_featured': is_featured,
+                'is_urgent': is_urgent
+            }
+            
+            return render_template('payment.html',
+                ad=ad,
+                ad_id=ad_id,
+                plan=plan,
+                plan_name=plan_name,
+                price=price,
+                days=days,
+                boost_priority=boost_priority,
+                is_featured=is_featured,
+                is_urgent=is_urgent
+            )
+        else:
+            return redirect(url_for("my_listings"))
+            
+    except Exception as e:
+        app.logger.error(f"Error in payment_page: {str(e)}")
+        flash(f"❌ Payment page error: {str(e)}", "error")
+        return redirect(url_for("my_listings"))
+
+@app.route("/process-payment", methods=["POST"])
+@login_required
+def process_payment():
+    """Process payment and apply boost to listing"""
+    user_id = session.get('user_id')
+    
+    try:
+        # Get payment data from form (primary) or session (fallback)
+        ad_id = request.form.get('ad_id') or (session.get('payment_data', {}).get('ad_id') if session.get('payment_data') else None)
+        plan = request.form.get('plan') or (session.get('payment_data', {}).get('plan') if session.get('payment_data') else None)
+        price = float(request.form.get('price', 0)) or (session.get('payment_data', {}).get('price', 0) if session.get('payment_data') else 0)
+        days = int(request.form.get('days', 0)) or (session.get('payment_data', {}).get('days', 0) if session.get('payment_data') else 0)
+        boost_priority = int(request.form.get('boost_priority', 0)) or (session.get('payment_data', {}).get('boost_priority', 0) if session.get('payment_data') else 0)
+        is_featured = request.form.get('is_featured') == '1' or (session.get('payment_data', {}).get('is_featured', False) if session.get('payment_data') else False)
+        is_urgent = request.form.get('is_urgent') == '1' or (session.get('payment_data', {}).get('is_urgent', False) if session.get('payment_data') else False)
+        payment_method = request.form.get('payment_method', 'upi')
+        
+        # Validate required fields
+        if not ad_id or not plan or price <= 0 or days <= 0:
+            flash("❌ Invalid payment data. Please try again.", "error")
+            return redirect(url_for("my_listings"))
+        
+        # Verify listing ownership
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id, user_id FROM listings WHERE id=%s
+        """, (ad_id,))
+        
+        listing = cursor.fetchone()
+        if not listing or listing['user_id'] != user_id:
+            cursor.close()
+            conn.close()
+            flash("❌ Unauthorized action", "error")
+            return redirect(url_for("my_listings"))
+        
+        # Generate transaction ID
+        import secrets
+        transaction_id = secrets.token_hex(8).upper()
+        
+        # Record payment (simulate success for now)
+        cursor.execute("""
+            INSERT INTO payments (user_id, ad_id, amount, method, transaction_id, status, created_at)
+            VALUES (%s, %s, %s, %s, %s, 'success', NOW())
+        """, (user_id, int(ad_id), float(price), payment_method, transaction_id))
+        
+        payment_id = cursor.lastrowid
+        
+        # Calculate boost expiry date
+        from datetime import datetime, timedelta
+        boost_until = datetime.now() + timedelta(days=int(days))
+        
+        # Update listing with boost information
+        cursor.execute("""
+            UPDATE listings
+            SET boost_type = %s, boost_expires_date = %s, boost_priority = %s,
+                is_featured = %s, is_urgent = %s
+            WHERE id = %s
+        """, (plan, boost_until, int(boost_priority), 
+              1 if is_featured else 0, 1 if is_urgent else 0, int(ad_id)))
+        
+        # Insert into ad_boosts for tracking
+        cursor.execute("""
+            INSERT INTO ad_boosts (user_id, ad_id, package_id, payment_id, status, start_date, expiry_date, created_at)
+            VALUES (%s, %s, 0, %s, 'active', NOW(), %s, NOW())
+        """, (user_id, int(ad_id), payment_id, boost_until))
+        
+        # If featured or super boost, also insert homepage feature record
+        if is_featured or plan == 'super':
+            cursor.execute("""
+                INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
+                VALUES (%s, %s, %s, NOW(), %s, 'active', NOW())
+            """, (int(ad_id), user_id, plan, boost_until))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Clear session payment data
+        if 'payment_data' in session:
+            del session['payment_data']
+        session.modified = True
+        
+        # Show success message with boost details
+        boost_emoji = {
+            'starter': '🌱',
+            'standard': '⭐',
+            'premium': '👑',
+            'featured': '🌟',
+            'super': '🔥'
+        }
+        emoji = boost_emoji.get(plan, '✨')
+        
+        flash(f"✅ {emoji} Payment successful! Your boost is now active for {days} days.", "success")
+        return redirect(url_for("payment_success"))
+        
+    except ValueError as ve:
+        app.logger.error(f"Value error in process_payment: {str(ve)}")
+        flash(f"❌ Invalid payment data format: {str(ve)}", "error")
+        return redirect(url_for("my_listings"))
+    except Exception as e:
+        app.logger.error(f"Error in process_payment: {str(e)}")
+        flash(f"❌ Payment processing error: {str(e)}", "error")
+        return redirect(url_for("my_listings"))
+
 @app.route("/payment-success")
 @login_required
 def payment_success():
-    flash("✅ Payment successful. Boost activated!", "success")
-    return redirect(url_for("my_promotions"))
+    # Show a dedicated confirmation screen after successful payment.
+    return render_template('payment_success.html')
+
+# ==================== SUBSCRIPTION SYSTEM ROUTES ====================
+
+@app.route("/seller-packages")
+@login_required
+def seller_packages():
+    """Display seller subscription packages page"""
+    user_id = session.get('user_id')
+    from subscription_helpers import get_user_active_subscription, get_plan_details
+    try:
+        active_subscription = get_user_active_subscription(user_id)
+        active_price = 0
+        if active_subscription:
+            active_price = get_plan_details(active_subscription['plan_name'])['price']
+        plan_prices = {
+            'Starter': 149,
+            'Growth': 299,
+            'Pro': 599,
+            'Business': 999,
+        }
+        return render_template(
+            "seller_packages.html",
+            active_subscription=active_subscription,
+            active_price=active_price,
+            plan_prices=plan_prices
+        )
+    except Exception as e:
+        app.logger.error(f"Error loading seller packages: {str(e)}")
+        flash(f"❌ Error loading seller packages: {str(e)}", "error")
+        return redirect(url_for("dashboard"))
+
+@app.route("/seller-plans")
+@login_required
+def seller_plans():
+    """Alias route for seller subscription packages page"""
+    return seller_packages()
+
+@app.route("/subscription-payment", methods=["POST"])
+@login_required
+def subscription_payment():
+    """Process subscription payment form submission"""
+    user_id = session.get('user_id')
+    from subscription_helpers import get_user_active_subscription, get_plan_details
+    
+    try:
+        plan_name = request.form.get('plan_name')
+        ad_limit = int(request.form.get('ad_limit', request.form.get('limit', 0) or 0))
+        price = float(request.form.get('price', request.form.get('amount', 0) or 0))
+        duration_days = int(request.form.get('duration_days', request.form.get('period_days', 0) or 0))
+        
+        # Validate input
+        if not plan_name or price <= 0 or duration_days <= 0:
+            flash("❌ Invalid plan data", "error")
+            return redirect(url_for("seller_packages"))
+
+        active_subscription = get_user_active_subscription(user_id)
+        action_type = 'new'
+        notice_text = "Activate your subscription now and start boosting your listings."
+
+        if active_subscription:
+            current_price = get_plan_details(active_subscription['plan_name'])['price']
+            if price < current_price:
+                flash("❌ Downgrade available after current plan expires", "error")
+                return redirect(url_for("seller_packages"))
+            if price == current_price and plan_name == active_subscription['plan_name']:
+                action_type = 'renew'
+                notice_text = "Extend your current plan now to keep your benefits active."
+            else:
+                action_type = 'upgrade'
+                notice_text = "Upgrade to a higher plan anytime and reset your benefits for the new plan."
+
+        session['subscription_data'] = {
+            'plan_name': plan_name,
+            'ad_limit': ad_limit,
+            'price': price,
+            'duration_days': duration_days,
+            'action_type': action_type
+        }
+        session.modified = True
+        
+        # Render payment page
+        return render_template('subscription_payment.html',
+            plan_name=plan_name,
+            price=price,
+            duration_days=duration_days,
+            ad_limit=ad_limit,
+            notice_text=notice_text,
+            action_type=action_type
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error in subscription_payment: {str(e)}")
+        flash(f"❌ Payment error: {str(e)}", "error")
+        return redirect(url_for("seller_packages"))
+
+@app.route("/process-subscription-payment", methods=["POST"])
+@login_required
+def process_subscription_payment():
+    """Process subscription payment and activate subscription"""
+    user_id = session.get('user_id')
+    
+    try:
+        # Get subscription data from session
+        sub_data = session.get('subscription_data')
+        payment_method = request.form.get('payment_method', 'upi')
+        
+        if not sub_data:
+            flash("❌ Invalid payment data", "error")
+            return redirect(url_for("seller_packages"))
+        
+        plan_name = sub_data.get('plan_name')
+        ad_limit = sub_data.get('ad_limit', 0)
+        price = sub_data.get('price', 0)
+        duration_days = sub_data.get('duration_days', 0)
+        action_type = sub_data.get('action_type', 'new')
+        
+        # Import subscription helpers
+        from subscription_helpers import (
+            create_user_subscription,
+            record_subscription_transaction,
+            get_user_active_subscription,
+            extend_user_subscription,
+            upgrade_user_subscription,
+            get_plan_details
+        )
+        import secrets
+        
+        # Generate transaction ID
+        transaction_id = secrets.token_hex(8).upper()
+        
+        # Record transaction
+        record_subscription_transaction(
+            user_id=user_id,
+            plan_name=plan_name,
+            amount=price,
+            duration_days=duration_days,
+            payment_status='success',
+            transaction_id=transaction_id,
+            payment_method=payment_method
+        )
+
+        subscription_id = None
+        operation_text = 'Subscription activated successfully.'
+        active_subscription = get_user_active_subscription(user_id)
+
+        if active_subscription:
+            current_price = get_plan_details(active_subscription['plan_name'])['price']
+            if price < current_price:
+                flash("❌ Downgrade available after current plan expires", "error")
+                return redirect(url_for("seller_packages"))
+            if action_type == 'renew' or (price == current_price and plan_name == active_subscription['plan_name']):
+                extended = extend_user_subscription(user_id, active_subscription['id'], duration_days)
+                if not extended:
+                    flash("❌ Error extending subscription", "error")
+                    return redirect(url_for("seller_packages"))
+                operation_text = 'Plan extended successfully.'
+            else:
+                subscription_id = upgrade_user_subscription(user_id, active_subscription['id'], plan_name, duration_days)
+                if not subscription_id:
+                    flash("❌ Error upgrading subscription", "error")
+                    return redirect(url_for("seller_packages"))
+                operation_text = 'Plan upgraded successfully.'
+        else:
+            subscription_id = create_user_subscription(
+                user_id=user_id,
+                plan_name=plan_name,
+                duration_days=duration_days,
+                transaction_id=transaction_id
+            )
+            if not subscription_id:
+                flash("❌ Error activating subscription", "error")
+                return redirect(url_for("seller_packages"))
+            operation_text = 'Subscription activated successfully.'
+        
+        # Save success info for success page
+        session['subscription_success'] = {
+            'plan_name': plan_name,
+            'amount': price,
+            'duration_days': duration_days,
+            'transaction_id': transaction_id,
+            'payment_method': payment_method,
+            'ad_limit': ad_limit,
+            'action_type': action_type,
+            'operation_text': operation_text
+        }
+
+        # Clear subscription_data used for payment form
+        if 'subscription_data' in session:
+            del session['subscription_data']
+        session.modified = True
+
+        flash(f"✅ {operation_text}", "success")
+        return redirect(url_for("subscription_success"))
+        
+    except Exception as e:
+        app.logger.error(f"Error in process_subscription_payment: {str(e)}")
+        flash(f"❌ Payment processing error: {str(e)}", "error")
+        return redirect(url_for("seller_packages"))
+
+@app.route("/subscription-success")
+@login_required
+def subscription_success():
+    """Subscription activation success page"""
+    success_info = session.get('subscription_success')
+    if not success_info:
+        flash("✅ Your subscription is active.", "success")
+        return redirect(url_for('dashboard'))
+
+    # Keep for one-time show, remove in next request
+    session.pop('subscription_success', None)
+    from datetime import datetime
+    return render_template('subscription_success.html', now=datetime.now(), **success_info)
+
+# ==================== END SUBSCRIPTION ROUTES ====================
+
 @app.route("/my-promotions")
 @login_required
 def my_promotions():
@@ -1582,14 +2264,62 @@ def edit_product(product_id):
         flash(f"❌ Error editing listing: {e}", "error")
         return redirect(url_for("my_listings"))
 
+@app.route("/api/wishlist/toggle/<int:listing_id>", methods=['POST'])
+def api_toggle_wishlist(listing_id):
+    """API endpoint to toggle wishlist (works for both logged-in and non-logged-in users)"""
+    user_id = session.get('user_id')
+    added = False
+    
+    # Session-based wishlist toggle
+    wl = session.get('wishlist', [])
+    if listing_id in wl:
+        wl.remove(listing_id)
+    else:
+        wl.append(listing_id)
+        added = True
+    session['wishlist'] = wl
+    
+    # DB-backed favorites for logged-in users
+    if user_id:
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS favorites (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    listing_id INT NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    UNIQUE KEY uniq_fav (user_id, listing_id),
+                    INDEX idx_user (user_id),
+                    INDEX idx_listing (listing_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            if added:
+                cur.execute("INSERT IGNORE INTO favorites (user_id, listing_id, created_at) VALUES (%s, %s, NOW())", (user_id, listing_id))
+            else:
+                cur.execute("DELETE FROM favorites WHERE user_id=%s AND listing_id=%s", (user_id, listing_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            app.logger.error(f"Error updating favorites in DB: {e}")
+    
+    return jsonify({
+        'success': True,
+        'added': added,
+        'count': len(wl)
+    })
+
+
 @app.route("/wishlist/toggle/<int:listing_id>")
 @login_required
-
 def toggle_wishlist(listing_id):
-    """Add or remove a listing from the user's wishlist stored in session"""
+    """Redirect to listing after toggling (backward compatibility)"""
     user_id = session.get('user_id')
     wl = session.get('wishlist', [])
     added = False
+    
     # Session toggle
     if listing_id in wl:
         wl.remove(listing_id)
@@ -1597,7 +2327,8 @@ def toggle_wishlist(listing_id):
         wl.append(listing_id)
         added = True
     session['wishlist'] = wl
-    # DB-backed favorites (create table if needed)
+    
+    # DB-backed favorites
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -1621,18 +2352,19 @@ def toggle_wishlist(listing_id):
         conn.close()
     except Exception:
         pass
+    
     action = 'added' if added else 'removed'
     flash(f"✅ Wishlist {action}", "success")
     return redirect(url_for('view_listing', listing_id=listing_id))
 
 
 @app.route("/api/wishlist")
-@login_required
-
 def api_wishlist():
-    """Return JSON array of wishlisted listings for current session"""
+    """Return JSON array of wishlisted listings (works for both logged-in and non-logged-in)"""
+    user_id = session.get('user_id')
     wl = session.get('wishlist', [])
     result = []
+    
     if wl:
         try:
             conn = get_db_connection()
@@ -1651,8 +2383,9 @@ def api_wishlist():
                 })
             cursor.close()
             conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.error(f"Error fetching wishlist items: {e}")
+    
     return jsonify(result)
 
 
@@ -1892,36 +2625,40 @@ def task_expire_boosts():
         return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route("/favorites")
-@login_required
 def favorites():
-    """Render wishlist grid from session."""
+    """Render wishlist grid from session or database (works for both logged-in and non-logged-in users)."""
     user_id = session.get('user_id')
     items = []
-    # Prefer DB favorites if available
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(dictionary=True)
+    
+    # For logged-in users, prefer DB favorites
+    if user_id:
         try:
-            cur.execute("""
-                SELECT l.id, l.title, l.price, l.photos, l.location
-                FROM favorites f
-                JOIN listings l ON f.listing_id = l.id
-                WHERE f.user_id=%s
-                ORDER BY f.created_at DESC
-            """, (user_id,))
+            conn = get_db_connection()
+            cur = conn.cursor(dictionary=True)
+            try:
+                cur.execute("""
+                    SELECT l.id, l.title, l.price, l.photos, l.location
+                    FROM favorites f
+                    JOIN listings l ON f.listing_id = l.id
+                    WHERE f.user_id=%s
+                    ORDER BY f.created_at DESC
+                """, (user_id,))
+            except Exception:
+                cur.execute("""
+                    SELECT l.id, l.title, l.price, l.photos, '' AS location
+                    FROM favorites f
+                    JOIN listings l ON f.listing_id = l.id
+                    WHERE f.user_id=%s
+                    ORDER BY f.created_at DESC
+                """, (user_id,))
+            items = cur.fetchall()
+            cur.close()
+            conn.close()
         except Exception:
-            cur.execute("""
-                SELECT l.id, l.title, l.price, l.photos, '' AS location
-                FROM favorites f
-                JOIN listings l ON f.listing_id = l.id
-                WHERE f.user_id=%s
-                ORDER BY f.created_at DESC
-            """, (user_id,))
-        items = cur.fetchall()
-        cur.close()
-        conn.close()
-    except Exception:
-        # Fallback to session-based wishlist
+            items = []
+    
+    # If no DB items (not logged in or no items), use session-based wishlist
+    if not items:
         wl = session.get('wishlist', [])
         if wl:
             try:
@@ -1937,6 +2674,7 @@ def favorites():
                 conn.close()
             except Exception:
                 items = []
+    
     return render_template("favorites.html", items=items)
 
 @app.route("/messages")
@@ -2124,6 +2862,23 @@ def profile():
 def payments():
     return redirect(url_for("my_promotions"))
 
+@app.route("/subscription-transactions")
+@login_required
+def subscription_transactions():
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM subscription_transactions WHERE user_id=%s ORDER BY created_at DESC", (user_id,))
+        transactions = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return render_template('subscription_transactions.html', transactions=transactions)
+    except Exception as e:
+        app.logger.error(f"Error loading subscription transactions: {str(e)}")
+        flash("❌ Unable to load transactions at the moment", "error")
+        return redirect(url_for('dashboard'))
+
 @app.route("/seller/<int:user_id>")
 def seller_profile(user_id):
     """Display public seller profile and their listings"""
@@ -2159,9 +2914,32 @@ def seller_profile(user_id):
 @app.route("/saved")
 @login_required
 def saved_items():
-    """View saved items"""
-    flash("Saved items page coming soon!", "info")
-    return redirect(url_for("dashboard"))
+    """View saved/wishlisted items"""
+    user_id = session.get('user_id')
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get wishlisted items from favorites table
+        cursor.execute("""
+            SELECT l.*, f.created_at as saved_at
+            FROM listings l
+            JOIN favorites f ON l.id = f.listing_id
+            WHERE f.user_id = %s AND l.status = 'active'
+            ORDER BY f.created_at DESC
+        """, (user_id,))
+        
+        wishlisted_items = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        return render_template('favorites.html', items=wishlisted_items)
+        
+    except Exception as e:
+        app.logger.error(f"Error loading saved items: {str(e)}")
+        flash(f"❌ Error loading saved items: {str(e)}", "error")
+        return redirect(url_for("dashboard"))
 
 @app.route("/orders")
 @login_required

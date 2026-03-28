@@ -3,6 +3,109 @@
 {% block title %}My Listings - ReGear{% endblock %}
 
 {% block content %}
+<style>
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .badge { animation: none; }
+  .badge[style*="pulse"] { animation: pulse 1s infinite; }
+
+  /* Boost Recommendation Styles */
+  .boost-recommendation-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .boost-recommendation-badge.low-views {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    color: #d2691e;
+    border: 1px solid #ff8c00;
+  }
+
+  .boost-recommendation-badge.no-activity {
+    background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+    color: #d63031;
+    border: 1px solid #e17055;
+  }
+
+  .boost-recommendation-badge.decay {
+    background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+    color: #8b4513;
+    border: 1px solid #d63031;
+  }
+
+  .boost-recommendation-badge.never-boosted {
+    background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+    color: white;
+    border: 1px solid #5f27cd;
+  }
+
+  .boost-recommendation-badge.performing-well {
+    background: linear-gradient(135deg, #55efc4 0%, #00b894 100%);
+    color: #00684a;
+    border: 1px solid #00b894;
+  }
+
+  .boost-hint {
+    background: #f8f9fa;
+    border-left: 4px solid #667eea;
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #495057;
+  }
+
+  .boost-status {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 4px;
+  }
+
+  .boost-btn-recommended {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border-color: #667eea !important;
+    color: white !important;
+    animation: gentle-glow 2s ease-in-out infinite alternate;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  @keyframes gentle-glow {
+    from { box-shadow: 0 0 5px rgba(102, 126, 234, 0.4); }
+    to { box-shadow: 0 0 15px rgba(102, 126, 234, 0.8); }
+  }
+
+  .boost-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  }
+
+  .boost-banner h5 {
+    margin: 0 0 5px 0;
+    font-weight: 700;
+  }
+
+  .boost-banner p {
+    margin: 0;
+    opacity: 0.9;
+  }
+</style>
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
@@ -14,30 +117,60 @@
         </div>
     </div>
 
+    <!-- Boost Recommendation Banner (hidden by default, shown by JavaScript) -->
+    <div id="boost-banner" class="boost-banner" style="display: none;">
+        <h5>🚀 Boost Recommendations Available</h5>
+        <p>Some of your ads need attention. Boost now to increase visibility and reach more buyers!</p>
+    </div>
+
     <div class="card mb-3">
         <div class="card-body">
-            <form method="GET" class="row g-2">
+            <!-- Tab Filters -->
+            <div class="row g-2 mb-3">
                 <div class="col-12 col-md-6">
-                    <div class="btn-group" role="group">
-                        <a href="{{ url_for('my_listings') }}" class="btn btn-outline-secondary {% if not status_filter %}active{% endif %}">All</a>
-                        <a href="{{ url_for('my_listings', status='active', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='active' %}active{% endif %}">Active</a>
-                        <a href="{{ url_for('my_listings', status='pending', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='pending' %}active{% endif %}">Pending</a>
-                        <a href="{{ url_for('my_listings', status='approved', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='approved' %}active{% endif %}">Approved</a>
-                        <a href="{{ url_for('my_listings', status='sold', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='sold' %}active{% endif %}">Sold</a>
-                        <a href="{{ url_for('my_listings', status='rejected', q=q, sort=sort) }}" class="btn btn-outline-secondary {% if status_filter=='rejected' %}active{% endif %}">Rejected</a>
+                    <div class="btn-group" role="group" style="display: flex; flex-wrap: wrap; gap: 4px;">
+                        <a href="{{ url_for('my_listings', q=search_query, sort=sort) }}" 
+                           class="btn btn-sm {% if not status_filter %}btn-secondary active{% else %}btn-outline-secondary{% endif %}" 
+                           title="Show all listings">All</a>
+                        <a href="{{ url_for('my_listings', status='pending', q=search_query, sort=sort) }}" 
+                           class="btn btn-sm {% if status_filter=='pending' %}btn-secondary active{% else %}btn-outline-secondary{% endif %}" 
+                           title="Listings awaiting approval">Pending</a>
+                        <a href="{{ url_for('my_listings', status='approved', q=search_query, sort=sort) }}" 
+                           class="btn btn-sm {% if status_filter=='approved' %}btn-secondary active{% else %}btn-outline-secondary{% endif %}" 
+                           title="Active approved listings">Approved</a>
+                        <a href="{{ url_for('my_listings', status='active', q=search_query, sort=sort) }}" 
+                           class="btn btn-sm {% if status_filter=='active' %}btn-secondary active{% else %}btn-outline-secondary{% endif %}" 
+                           title="Currently active listings">Active</a>
+                        <a href="{{ url_for('my_listings', status='sold', q=search_query, sort=sort) }}" 
+                           class="btn btn-sm {% if status_filter=='sold' %}btn-secondary active{% else %}btn-outline-secondary{% endif %}" 
+                           title="Sold listings">Sold</a>
+                        <a href="{{ url_for('my_listings', status='rejected', q=search_query, sort=sort) }}" 
+                           class="btn btn-sm {% if status_filter=='rejected' %}btn-secondary active{% else %}btn-outline-secondary{% endif %}" 
+                           title="Rejected listings">Rejected</a>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <input type="text" name="q" value="{{ q or '' }}" class="form-control" placeholder="Search title or category">
+            </div>
+
+            <!-- Search & Sort Form -->
+            <form method="GET" class="row g-2">
+                <input type="hidden" name="status" value="{{ status_filter or '' }}">
+                <div class="col-12 col-md-4">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" name="q" value="{{ search_query or '' }}" class="form-control" placeholder="Search title or category">
+                    </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <select name="sort" class="form-select">
+                <div class="col-12 col-md-3">
+                    <select name="sort" class="form-select form-select-sm">
                         <option value="new" {% if sort=='new' %}selected{% endif %}>Newest First</option>
                         <option value="old" {% if sort=='old' %}selected{% endif %}>Oldest First</option>
                         <option value="price_asc" {% if sort=='price_asc' %}selected{% endif %}>Price Low to High</option>
                         <option value="price_desc" {% if sort=='price_desc' %}selected{% endif %}>Price High to Low</option>
                         <option value="views_desc" {% if sort=='views_desc' %}selected{% endif %}>Most Viewed</option>
                     </select>
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" class="btn btn-primary btn-sm w-100">Apply</button>
                 </div>
             </form>
         </div>
@@ -46,7 +179,16 @@
         {% if listings %}
             {% for ad in listings %}
             <div class="col-12 col-md-6 mb-3">
-                    <div class="card position-relative listing-card" data-href="{{ url_for('view_listing', listing_id=ad.id) }}">
+                    <div class="card position-relative listing-card" data-href="{{ url_for('view_listing', listing_id=ad.id) }}" 
+                         data-ad-id="{{ ad.id }}" 
+                         data-created-at="{{ ad.created_at.strftime('%Y-%m-%d %H:%M:%S') if ad.created_at else '' }}"
+                         data-view-count="{{ ad.view_count | default(0) }}"
+                         data-messages-count="{{ ad.messages_count | default(0) }}"
+                         data-boost-expires="{{ ad.boost_expires_date.strftime('%Y-%m-%d %H:%M:%S') if ad.boost_expires_date else '' }}"
+                         data-is-boosted="{{ 1 if ad.is_boosted else 0 }}">
+                        <!-- Boost Recommendation Badge (added by JavaScript) -->
+                        <div class="boost-recommendation-badge-container"></div>
+                        
                         <div class="row g-0">
                             <div class="col-4">
                                 {% set img = (ad.photos.split(',')[0] if ad.photos else '') %}
@@ -56,8 +198,18 @@
                                         {% if ad.status == 'sold' or ad.approval_status == 'sold' %}
                                             <span class="position-absolute top-0 start-0 badge bg-secondary m-2">SOLD</span>
                                         {% endif %}
-                                        {% if ad.boosted %}
-                                            <span class="position-absolute top-0 end-0 badge bg-warning text-dark m-2">Boosted</span>
+                                        {% if ad.is_boosted %}
+                                            {% if ad.is_urgent %}
+                                                <span class="position-absolute top-0 end-0 badge bg-danger m-2" style="animation: pulse infinite 1s;"><i class="fas fa-fire"></i> URGENT</span>
+                                            {% elif ad.is_featured %}
+                                                <span class="position-absolute top-0 end-0 badge bg-warning text-dark m-2"><i class="fas fa-star"></i> Featured</span>
+                                            {% elif ad.boost_type == 'premium' %}
+                                                <span class="position-absolute top-0 end-0 badge bg-info text-white m-2"><i class="fas fa-crown"></i> Premium</span>
+                                            {% elif ad.boost_type == 'standard' %}
+                                                <span class="position-absolute top-0 end-0 badge bg-primary text-white m-2"><i class="fas fa-bolt"></i> Boosted</span>
+                                            {% else %}
+                                                <span class="position-absolute top-0 end-0 badge bg-success text-white m-2"><i class="fas fa-rocket"></i> Boosted</span>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 {% else %}
@@ -70,6 +222,21 @@
                                     <p class="card-text mb-1"><strong>₹{{ ad.price }}</strong></p>
                                     <p class="card-text mb-1"><small class="text-muted">{{ ad.category }} · {{ ad.subcategory }}</small></p>
                                     <p class="card-text mb-1"><small class="text-muted">{{ ad.location or 'India' }} · {{ ad.created_at.strftime('%d %b %Y') if ad.created_at else '' }}</small></p>
+                                    {% if ad.is_boosted and ad.boost_expires_date %}
+                                        <p class="card-text mb-1">
+                                            {% if ad.is_urgent %}
+                                                <small class="text-danger"><i class="fas fa-fire"></i> 🔴 Super Boosted until {{ ad.boost_expires_date.strftime('%d %b') }}</small>
+                                            {% elif ad.is_featured %}
+                                                <small class="text-warning"><i class="fas fa-star"></i> 🌟 Featured until {{ ad.boost_expires_date.strftime('%d %b') }}</small>
+                                            {% elif ad.boost_type == 'premium' %}
+                                                <small class="text-info"><i class="fas fa-crown"></i> 👑 Premium boost until {{ ad.boost_expires_date.strftime('%d %b') }}</small>
+                                            {% elif ad.boost_type == 'standard' %}
+                                                <small style="color: #ff006e;"><i class="fas fa-bolt"></i> ⭐ Standard boost until {{ ad.boost_expires_date.strftime('%d %b') }}</small>
+                                            {% else %}
+                                                <small class="text-success"><i class="fas fa-bolt"></i> 🌱 Starter boost until {{ ad.boost_expires_date.strftime('%d %b') }}</small>
+                                            {% endif %}
+                                        </p>
+                                    {% endif %}
                                     <p class="card-text">
                                         {% if ad.approval_status == 'pending' %}
                                             <span class="badge bg-warning text-dark">Pending</span>
@@ -92,6 +259,13 @@
                                     <div class="progress" style="height: 6px;">
                                         <div class="progress-bar bg-success" role="progressbar" style="width: {{ ad.performance_percent | default(0) }}%;" aria-valuenow="{{ ad.performance_percent | default(0) }}" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
+                                    
+                                    <!-- Boost Hint (added by JavaScript) -->
+                                    <div class="boost-hint-container"></div>
+                                    
+                                    <!-- Boost Status (added by JavaScript) -->
+                                    <div class="boost-status-container"></div>
+                                    
                                     {% if ad.boosted and ad.boost_expires %}
                                         <small class="text-success d-block mt-1">Boosted until: {{ ad.boost_expires.strftime('%d %b %Y') if ad.boost_expires else '' }}</small>
                                     {% endif %}
@@ -101,13 +275,13 @@
                                 </div>
                                 <div class="card-footer bg-white border-0 pt-0">
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Actions">
-                                        <a href="/edit-product/{{ ad.id }}" class="btn btn-outline-secondary">Edit</a>
-                                        <a href="{{ url_for('boost_listing', listing_id=ad.id) }}" class="btn btn-outline-warning">Boost</a>
-                                        <a href="/mark-sold/{{ ad.id }}" class="btn btn-outline-success" onclick="return confirm('Mark this item as sold?');">Mark as Sold</a>
-                                        <a href="/delete-product/{{ ad.id }}" class="btn btn-outline-danger" onclick="return confirm('Delete this listing?');">Delete</a>
+                                        <a href="/edit-product/{{ ad.id }}" class="btn btn-outline-secondary" onclick="event.stopPropagation();">Edit</a>
+                                        <a href="{{ url_for('boost_listing', listing_id=ad.id) }}" class="btn btn-outline-warning boost-btn" onclick="event.stopPropagation();"><i class="fas fa-bolt"></i> Boost</a>
+                                        <a href="/mark-sold/{{ ad.id }}" class="btn btn-outline-success" onclick="event.stopPropagation(); return confirm('Mark this item as sold?');">Mark as Sold</a>
+                                        <a href="/delete-product/{{ ad.id }}" class="btn btn-outline-danger" onclick="event.stopPropagation(); return confirm('Delete this listing?');">Delete</a>
                                         {% if ad.days_remaining is not none and ad.days_remaining == 0 %}
                                         <form method="POST" action="{{ url_for('renew_listing', product_id=ad.id) }}" style="display:inline;">
-                                            <button type="submit" class="btn btn-outline-primary" onclick="return confirm('Renew this listing for 30 days?');">Renew</button>
+                                            <button type="submit" class="btn btn-outline-primary" onclick="event.stopPropagation(); return confirm('Renew this listing for 30 days?');">Renew</button>
                                         </form>
                                         {% endif %}
                                     </div>
@@ -160,25 +334,162 @@
 <style>
 .listing-card { transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
 .listing-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+.btn-group-sm .btn { padding: 0.25rem 0.5rem; font-size: 0.85rem; }
 </style>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // Handle card clicks - navigate to listing detail
   document.querySelectorAll('.listing-card').forEach(function(card) {
     const href = card.getAttribute('data-href');
     card.addEventListener('click', function(e) {
-      if (e.target.closest('.btn-group')) return;
+      // Don't navigate if clicking on buttons or button group
+      if (e.target.closest('.btn-group') || e.target.closest('.btn')) {
+        return;
+      }
       if (href) window.location.href = href;
     });
   });
-  // Ensure button clicks always navigate and don't get swallowed by card handler
-  document.querySelectorAll('.listing-card .btn-group a').forEach(function(link) {
-    link.addEventListener('click', function(e) {
-      e.stopPropagation();
-      // allow default navigation; for safety, force navigate
-      if (this.href) window.location.href = this.href;
-    });
+
+  // Boost Recommendation System
+  let hasBoostRecommendations = false;
+
+  document.querySelectorAll('.listing-card').forEach(function(card) {
+    const adId = card.getAttribute('data-ad-id');
+    const createdAt = card.getAttribute('data-created-at');
+    const viewCount = parseInt(card.getAttribute('data-view-count') || 0);
+    const messagesCount = parseInt(card.getAttribute('data-messages-count') || 0);
+    const boostExpires = card.getAttribute('data-boost-expires');
+    const isBoosted = card.getAttribute('data-is-boosted') === '1';
+
+    // Calculate ad age in days
+    const adAge = createdAt ? Math.floor((new Date() - new Date(createdAt)) / (1000 * 60 * 60 * 24)) : 0;
+
+    // Calculate days since last boost
+    let daysSinceLastBoost = null;
+    if (boostExpires) {
+      const boostEndDate = new Date(boostExpires);
+      const now = new Date();
+      if (boostEndDate < now) {
+        // Boost has expired, calculate from expiry date
+        daysSinceLastBoost = Math.floor((now - boostEndDate) / (1000 * 60 * 60 * 24));
+      } else {
+        // Boost is still active
+        daysSinceLastBoost = 0;
+      }
+    }
+
+    // Determine boost recommendation
+    let recommendation = null;
+    let badgeClass = '';
+    let badgeText = '';
+    let hintText = '';
+    let statusText = '';
+
+    // Check conditions in priority order (most urgent first)
+    // 1. NO ACTIVITY CONDITION: views = 0 OR (messages = 0 AND ad_age ≥ 2 days)
+    if (viewCount === 0 || (messagesCount === 0 && adAge >= 2)) {
+      recommendation = 'no-activity';
+      badgeClass = 'no-activity';
+      badgeText = 'No Activity – Promote Your Ad';
+      hintText = 'Your ad isn\'t getting any attention. Boost now to reach more buyers!';
+      hasBoostRecommendations = true;
+    }
+    // 2. LOW PERFORMANCE CONDITION: views < 10 AND ad_age ≥ 2 days
+    else if (viewCount < 10 && adAge >= 2) {
+      recommendation = 'low-views';
+      badgeClass = 'low-views';
+      badgeText = 'Low Views – Boost Now';
+      hintText = 'This ad is not getting enough views. Boost to increase visibility!';
+      hasBoostRecommendations = true;
+    }
+    // 3. DECAY CONDITION: ad_age ≥ 5 days AND no recent boost
+    else if (adAge >= 5 && (!boostExpires || daysSinceLastBoost >= 3)) {
+      recommendation = 'decay';
+      badgeClass = 'decay';
+      badgeText = 'Ad visibility dropping – Boost Again';
+      hintText = 'Your ad\'s visibility is dropping. Boost again to maintain reach!';
+      hasBoostRecommendations = true;
+    }
+    // 4. RE-BOOST CONDITION: recently boosted but ready for reboost
+    else if (boostExpires && daysSinceLastBoost >= 3) {
+      recommendation = 'reboost-ready';
+      hintText = 'Ready to boost again! Increase your ad\'s visibility.';
+      hasBoostRecommendations = true;
+    }
+    // 5. NEVER BOOSTED CONDITION (only if no other conditions apply)
+    else if (!boostExpires) {
+      recommendation = 'never-boosted';
+      badgeClass = 'never-boosted';
+      badgeText = 'Never Boosted';
+      hintText = 'Try boosting your ad to reach more potential buyers!';
+      statusText = 'Never boosted';
+    }
+    // 6. CURRENTLY BOOSTED
+    else if (boostExpires && daysSinceLastBoost === 0) {
+      statusText = 'Currently boosted';
+    }
+    // 7. BOOST EXPIRED RECENTLY
+    else if (boostExpires && daysSinceLastBoost > 0 && daysSinceLastBoost < 3) {
+      statusText = `Boost available in ${3 - daysSinceLastBoost} days`;
+    }
+    // 8. PERFORMING WELL (optional positive feedback)
+    else if (viewCount >= 20 && adAge >= 1) {
+      recommendation = 'performing-well';
+      badgeClass = 'performing-well';
+      badgeText = 'Performing Well';
+      hintText = 'Your ad is performing well! Keep up the great work.';
+      statusText = 'Ad performing well';
+    }
+
+    // Apply recommendation UI elements
+    if (recommendation) {
+      // Add badge
+      if (badgeText) {
+        const badgeContainer = card.querySelector('.boost-recommendation-badge-container');
+        const badge = document.createElement('div');
+        badge.className = `boost-recommendation-badge ${badgeClass}`;
+        badge.textContent = badgeText;
+        badgeContainer.appendChild(badge);
+      }
+
+      // Add hint
+      if (hintText) {
+        const hintContainer = card.querySelector('.boost-hint-container');
+        const hint = document.createElement('div');
+        hint.className = 'boost-hint';
+        hint.innerHTML = `<i class="fas fa-lightbulb"></i> ${hintText}`;
+        hintContainer.appendChild(hint);
+      }
+
+      // Add status
+      if (statusText) {
+        const statusContainer = card.querySelector('.boost-status-container');
+        const status = document.createElement('div');
+        status.className = 'boost-status';
+        status.innerHTML = `<i class="fas fa-info-circle"></i> ${statusText}`;
+        statusContainer.appendChild(status);
+      }
+
+      // Update boost button if recommendation is strong
+      if (['low-views', 'no-activity', 'decay', 'reboost-ready'].includes(recommendation)) {
+        const boostBtn = card.querySelector('.boost-btn');
+        if (boostBtn) {
+          boostBtn.innerHTML = '<i class="fas fa-rocket"></i> Boost Now 🚀';
+          boostBtn.classList.add('boost-btn-recommended');
+        }
+      }
+    }
   });
+
+  // Show boost banner if any recommendations exist
+  if (hasBoostRecommendations) {
+    const banner = document.getElementById('boost-banner');
+    if (banner) {
+      banner.style.display = 'block';
+    }
+  }
 });
 </script>
-<!-- Cards clickable via stretched-link and JS; buttons in footer prevent accidental navigation -->
+<!-- Tab filtering, search, sorting, and pagination enabled; simple boost button links to boost page -->
 {% endblock %}

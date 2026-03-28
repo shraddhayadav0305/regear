@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Seller Plans - ReGear</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; }
+        .header { text-align: center; margin: 40px 0; }
+        .plans-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        .plan { background: white; border-radius: 10px; padding: 30px; margin: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .plan h3 { color: #667eea; margin-bottom: 15px; }
+        .price { font-size: 28px; font-weight: bold; color: #333; margin: 15px 0; }
+        .features { list-style: none; padding: 0; }
+        .features li { padding: 8px 0; border-bottom: 1px solid #eee; }
+        .features li:last-child { border-bottom: none; }
+        .btn-plan { margin-top: 20px; width: 100%; }
+        .popular { border: 3px solid #667eea; }
+        .popular-badge { text-align: center; background: #667eea; color: white; padding: 5px; border-radius: 5px; margin: -30px -30px 15px -30px; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="header">
+            <h1>🚀 Seller Subscription Plans</h1>
+            <p>Choose a plan to boost your listings and reach more buyers</p>
+        </div>
+
+        {% set plan_prices = plan_prices if plan_prices is defined else {'Starter':149,'Growth':299,'Pro':599,'Business':999} %}
+        {% set active_plan = active_subscription.plan_name if active_subscription else None %}
+        {% set active_price = active_price if active_price is defined else (plan_prices.get(active_plan, 0) if active_plan else 0) %}
+
+        {% if active_subscription %}
+            <div class="alert alert-success text-center" role="alert">
+                <strong>Active Plan:</strong> {{ active_subscription.plan_name }} ({{ active_subscription.ads_used }} / {{ active_subscription.ad_limit if active_subscription.ad_limit != -1 else 'Unlimited' }} boosts used)
+                | Expires: {{ active_subscription.end_date.strftime('%d %b %Y') }}
+            </div>
+            <div class="alert alert-info text-center" role="alert">
+                🚀 You can upgrade your plan anytime or extend the same plan before it expires.
+            </div>
+        {% endif %}
+
+        <div class="plans-container">
+            <div class="row">
+                <!-- Starter Plan -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="plan">
+                        <h3>Starter</h3>
+                        <div class="price">₹149</div>
+                        <p><small>per month</small></p>
+                        
+                        <ul class="features">
+                            <li>✅ 5 boosts/month</li>
+                            <li>✅ Basic visibility</li>
+                            <li>✅ Simple analytics</li>
+                            <li>✅ Email support</li>
+                        </ul>
+                        
+                        <form method="POST" action="/subscription-payment" onsubmit="return handleSubscriptionForm(this)">
+                            <input type="hidden" name="plan_name" value="Starter">
+                            <input type="hidden" name="price" value="149">
+                            <input type="hidden" name="amount" value="149">
+                            <input type="hidden" name="ad_limit" value="5">
+                            <input type="hidden" name="duration_days" value="30">
+                            {% set plan_price = 149 %}
+                            {% set action_type = 'new' %}
+                            {% set button_text = 'Select Plan' %}
+                            {% set button_class = 'btn btn-primary btn-plan' %}
+                            {% if active_subscription %}
+                                {% if plan_price > active_price %}
+                                    {% set action_type = 'upgrade' %}
+                                    {% set button_text = 'Upgrade Plan' %}
+                                {% elif plan_price == active_price and active_plan == 'Starter' %}
+                                    {% set action_type = 'renew' %}
+                                    {% set button_text = 'Buy Again' %}
+                                    {% set button_class = 'btn btn-success btn-plan' %}
+                                {% elif plan_price < active_price %}
+                                    {% set action_type = 'downgrade' %}
+                                    {% set button_text = 'Not Allowed' %}
+                                    {% set button_class = 'btn btn-outline-secondary btn-plan' %}
+                                {% endif %}
+                            {% endif %}
+                            <input type="hidden" name="action_type" value="{{ action_type }}">
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Growth Plan -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="plan popular">
+                        <div class="popular-badge">Most Popular ⭐</div>
+                        <h3>Growth</h3>
+                        <div class="price">₹299</div>
+                        <p><small>per month</small></p>
+                        
+                        <ul class="features">
+                            <li>✅ 15 boosts/month</li>
+                            <li>✅ Higher ranking</li>
+                            <li>✅ Performance metrics</li>
+                            <li>✅ Priority support</li>
+                        </ul>
+                        
+                        <form method="POST" action="/subscription-payment" onsubmit="return handleSubscriptionForm(this)">
+                            <input type="hidden" name="plan_name" value="Growth">
+                            <input type="hidden" name="price" value="299">
+                            <input type="hidden" name="amount" value="299">
+                            <input type="hidden" name="ad_limit" value="15">
+                            <input type="hidden" name="duration_days" value="30">
+                            {% set plan_price = 299 %}
+                            {% set action_type = 'new' %}
+                            {% set button_text = 'Select Plan' %}
+                            {% set button_class = 'btn btn-primary btn-plan' %}
+                            {% if active_subscription %}
+                                {% if plan_price > active_price %}
+                                    {% set action_type = 'upgrade' %}
+                                    {% set button_text = 'Upgrade Plan' %}
+                                {% elif plan_price == active_price and active_plan == 'Growth' %}
+                                    {% set action_type = 'renew' %}
+                                    {% set button_text = 'Buy Again' %}
+                                    {% set button_class = 'btn btn-success btn-plan' %}
+                                {% elif plan_price < active_price %}
+                                    {% set action_type = 'downgrade' %}
+                                    {% set button_text = 'Not Allowed' %}
+                                    {% set button_class = 'btn btn-outline-secondary btn-plan' %}
+                                {% endif %}
+                            {% endif %}
+                            <input type="hidden" name="action_type" value="{{ action_type }}">
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Pro Plan -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="plan">
+                        <h3>Pro</h3>
+                        <div class="price">₹599</div>
+                        <p><small>per month</small></p>
+                        
+                        <ul class="features">
+                            <li>✅ 40 boosts/month</li>
+                            <li>✅ Priority ranking</li>
+                            <li>✅ Featured listings</li>
+                            <li>✅ Trusted badge</li>
+                        </ul>
+                        
+                        <form method="POST" action="/subscription-payment" onsubmit="return handleSubscriptionForm(this)">
+                            <input type="hidden" name="plan_name" value="Pro">
+                            <input type="hidden" name="price" value="599">
+                            <input type="hidden" name="amount" value="599">
+                            <input type="hidden" name="ad_limit" value="40">
+                            <input type="hidden" name="duration_days" value="30">
+                            {% set plan_price = 599 %}
+                            {% set action_type = 'new' %}
+                            {% set button_text = 'Select Plan' %}
+                            {% set button_class = 'btn btn-primary btn-plan' %}
+                            {% if active_subscription %}
+                                {% if plan_price > active_price %}
+                                    {% set action_type = 'upgrade' %}
+                                    {% set button_text = 'Upgrade Plan' %}
+                                {% elif plan_price == active_price and active_plan == 'Pro' %}
+                                    {% set action_type = 'renew' %}
+                                    {% set button_text = 'Buy Again' %}
+                                    {% set button_class = 'btn btn-success btn-plan' %}
+                                {% elif plan_price < active_price %}
+                                    {% set action_type = 'downgrade' %}
+                                    {% set button_text = 'Not Allowed' %}
+                                    {% set button_class = 'btn btn-outline-secondary btn-plan' %}
+                                {% endif %}
+                            {% endif %}
+                            <input type="hidden" name="action_type" value="{{ action_type }}">
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Business Plan -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="plan">
+                        <h3>Business</h3>
+                        <div class="price">₹999</div>
+                        <p><small>per month</small></p>
+                        
+                        <ul class="features">
+                            <li>✅ Unlimited boosts</li>
+                            <li>✅ Top priority</li>
+                            <li>✅ Home page featured</li>
+                            <li>✅ Premium badge</li>
+                        </ul>
+                        
+                        <form method="POST" action="/subscription-payment" onsubmit="return handleSubscriptionForm(this)">
+                            <input type="hidden" name="plan_name" value="Business">
+                            <input type="hidden" name="price" value="999">
+                            <input type="hidden" name="amount" value="999">
+                            <input type="hidden" name="ad_limit" value="-1">
+                            <input type="hidden" name="duration_days" value="30">
+                            {% set plan_price = 999 %}
+                            {% set action_type = 'new' %}
+                            {% set button_text = 'Select Plan' %}
+                            {% set button_class = 'btn btn-primary btn-plan' %}
+                            {% if active_subscription %}
+                                {% if plan_price > active_price %}
+                                    {% set action_type = 'upgrade' %}
+                                    {% set button_text = 'Upgrade Plan' %}
+                                {% elif plan_price == active_price and active_plan == 'Business' %}
+                                    {% set action_type = 'renew' %}
+                                    {% set button_text = 'Buy Again' %}
+                                    {% set button_class = 'btn btn-success btn-plan' %}
+                                {% elif plan_price < active_price %}
+                                    {% set action_type = 'downgrade' %}
+                                    {% set button_text = 'Not Allowed' %}
+                                    {% set button_class = 'btn btn-outline-secondary btn-plan' %}
+                                {% endif %}
+                            {% endif %}
+                            <input type="hidden" name="action_type" value="{{ action_type }}">
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 50px; margin-bottom: 30px;">
+            <a href="/subscription-transactions" class="btn btn-info me-2">View My Transactions</a>
+            <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        function handleSubscriptionForm(form) {
+            var actionType = form.querySelector('input[name="action_type"]').value;
+            if (actionType === 'downgrade') {
+                alert('Downgrade available after current plan expires');
+                return false;
+            }
+            return true;
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

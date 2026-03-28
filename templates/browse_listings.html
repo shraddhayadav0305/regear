@@ -313,6 +313,16 @@
             padding: 40px 0 20px;
             margin-top: 60px;
         }
+
+        /* Toast animations */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -481,7 +491,12 @@
                             {% endif %}
                             </div>
                             <div class="listing-content">
-                                <h5 class="listing-title">{{ listing.title }}</h5>
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="listing-title">{{ listing.title }}</h5>
+                                    <button onclick="toggleListingWishlist({{ listing.id }}, this)" class="btn btn-link p-0 text-decoration-none" title="Add to wishlist">
+                                        <i class="{% if listing.in_wishlist %}fas{% else %}far{% endif %} fa-heart" style="color:{% if listing.in_wishlist %}#e63946{% else %}#ccc{% endif %}"></i>
+                                    </button>
+                                </div>
                                 <div class="listing-price">₹{{ listing.price }}</div>
                                 <div class="listing-location">
                                     <i class="fas fa-map-marker-alt"></i>
@@ -541,6 +556,68 @@
                     document.getElementById('wishlistBadge').textContent = data.length;
                 });
             }
+        }
+
+        function toggleListingWishlist(listingId, buttonElement) {
+            const icon = buttonElement.querySelector('i');
+            
+            fetch(`/wishlist/toggle/${listingId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.added) {
+                        icon.className = 'fas fa-heart';
+                        icon.style.color = '#e63946';
+                        showToast('Added to wishlist!', 'success');
+                    } else {
+                        icon.className = 'far fa-heart';
+                        icon.style.color = '#ccc';
+                        showToast('Removed from wishlist!', 'info');
+                    }
+                    // Update navbar badge
+                    const navbarBadge = document.getElementById('wishlistBadge');
+                    if (navbarBadge) {
+                        navbarBadge.textContent = data.count;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error updating wishlist', 'error');
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                font-family: 'Poppins', sans-serif;
+                font-size: 14px;
+                font-weight: 500;
+                animation: slideInRight 0.3s ease;
+                max-width: 300px;
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
 
         function toggleFilters() {
