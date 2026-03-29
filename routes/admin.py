@@ -100,6 +100,63 @@ def dashboard():
         cursor.execute("SELECT COUNT(*) as count FROM listings WHERE approval_status='sold'")
         stats['sold_listings'] = cursor.fetchone()['count']
 
+        # Active subscriptions
+        try:
+            cursor.execute("SELECT COUNT(*) as count FROM user_subscriptions WHERE status='active' AND end_date > NOW()")
+            stats['active_subscriptions'] = cursor.fetchone()['count']
+        except Exception:
+            stats['active_subscriptions'] = 0
+
+        # Expired subscriptions
+        try:
+            cursor.execute("SELECT COUNT(*) as count FROM user_subscriptions WHERE status != 'active' OR end_date <= NOW()")
+            stats['expired_subscriptions'] = cursor.fetchone()['count']
+        except Exception:
+            stats['expired_subscriptions'] = 0
+
+        # Boosted listings count
+        try:
+            cursor.execute("SELECT COUNT(*) as count FROM boosted_listings")
+            stats['boosted_listings'] = cursor.fetchone()['count']
+        except Exception:
+            stats['boosted_listings'] = 0
+
+        # Daily user growth
+        try:
+            cursor.execute("SELECT COUNT(*) as count FROM users WHERE DATE(created_at)=CURDATE() AND role != 'admin'")
+            stats['new_users_today'] = cursor.fetchone()['count']
+            cursor.execute("SELECT COUNT(*) as count FROM users WHERE DATE(created_at)=DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND role != 'admin'")
+            yesterday = cursor.fetchone()['count']
+            stats['new_users_growth'] = int(((stats['new_users_today'] - yesterday) / yesterday) * 100) if yesterday else (100 if stats['new_users_today'] > 0 else 0)
+        except Exception:
+            stats['new_users_today'] = 0
+            stats['new_users_growth'] = 0
+
+        # Daily listing growth
+        try:
+            cursor.execute("SELECT COUNT(*) as count FROM listings WHERE DATE(created_at)=CURDATE()")
+            stats['listings_today'] = cursor.fetchone()['count']
+            cursor.execute("SELECT COUNT(*) as count FROM listings WHERE DATE(created_at)=DATE_SUB(CURDATE(), INTERVAL 1 DAY)")
+            yesterday_listings = cursor.fetchone()['count']
+            stats['listings_growth'] = int(((stats['listings_today'] - yesterday_listings) / yesterday_listings) * 100) if yesterday_listings else (100 if stats['listings_today'] > 0 else 0)
+        except Exception:
+            stats['listings_today'] = 0
+            stats['listings_growth'] = 0
+
+        # Total transactions
+        try:
+            cursor.execute("SELECT COUNT(*) as count FROM payments")
+            stats['total_transactions'] = cursor.fetchone()['count']
+        except Exception:
+            stats['total_transactions'] = 0
+
+        # Revenue this month
+        try:
+            cursor.execute("SELECT COALESCE(SUM(amount),0) as count FROM payments WHERE status IN ('success','paid') AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
+            stats['revenue_month'] = cursor.fetchone()['count']
+        except Exception:
+            stats['revenue_month'] = 0
+
         # Total complaints
         cursor.execute("SELECT COUNT(*) as count FROM complaints WHERE status='pending'")
         stats['pending_complaints'] = cursor.fetchone()['count']
@@ -221,6 +278,121 @@ def extend_boost(boost_id):
 @admin_required
 def boosted_ads_alias():
     return boosted_listings()
+
+@admin_bp.route("/subscriptions")
+@admin_required
+def manage_subscriptions():
+    """List seller subscription records for admin review."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        status_filter = request.args.get('status', 'all')
+        search = request.args.get('search', '')
+        items_per_page = 12
+
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+
+        where_clauses = []
+        params = []
+
+        if status_filter == 'active':
+            where_clauses.append("us.status = 'active' AND us.end_date > NOW()")
+        elif status_filter == 'expired':
+            where_clauses.append("(us.status = 'expired' OR us.end_date <= NOW())")
+        elif status_filter == 'expiring':
+            where_clauses.append("us.status = 'active' AND us.end_date <= DATE_ADD(NOW(), INTERVAL 7 DAY)")
+
+        if search:
+            where_clauses.append("(u.username LIKE %s OR u.email LIKE %s OR us.plan_name LIKE %s)")
+            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+        where_sql = ' WHERE ' + ' AND '.join(where_clauses) if where_clauses else ''
+
+        count_query = "SELECT COUNT(*) as total FROM user_subscriptions us LEFT JOIN users u ON u.id = us.user_id" + where_sql
+        cur.execute(count_query, tuple(params))
+        count_row = cur.fetchone()
+        total = count_row['total'] if count_row else 0
+
+        offset = (page - 1) * items_per_page
+        cur.execute(f"""
+            SELECT us.id, us.user_id, u.username, u.email, us.plan_name, us.ad_limit, us.ads_used, 
+                   us.start_date, us.end_date, us.status,
+                   (SELECT st.amount FROM subscription_transactions st 
+                    WHERE st.user_id = us.user_id AND st.plan_name = us.plan_name 
+                      AND st.created_at <= us.start_date 
+                    ORDER BY st.created_at DESC LIMIT 1) as amount_paid
+            FROM user_subscriptions us
+            LEFT JOIN users u ON u.id = us.user_id
+            {where_sql}
+            ORDER BY us.start_date DESC
+            LIMIT %s OFFSET %s
+        """, tuple(params + [items_per_page, offset]))
+        subscriptions = cur.fetchall()
+
+        for sub in subscriptions:
+            sub['amount_paid'] = float(sub['amount_paid'] or 0)
+            sub['is_active'] = (sub['status'] == 'active' and sub['end_date'] and sub['end_date'] > datetime.now())
+            sub['is_expired'] = (sub['status'] != 'active' or (sub['end_date'] and sub['end_date'] <= datetime.now()))
+
+        total_pages = (total + items_per_page - 1) // items_per_page
+
+        cur.close()
+        conn.close()
+
+        return render_template("admin/admin_subscriptions.html",
+                             subscriptions=subscriptions,
+                             total=total,
+                             status_filter=status_filter,
+                             search=search,
+                             total_pages=total_pages,
+                             current_page=page)
+    except Exception as e:
+        flash(f"❌ Error loading subscriptions: {str(e)}", "error")
+        return redirect(url_for("admin.dashboard"))
+
+@admin_bp.route("/user/<int:user_id>/subscription/<int:subscription_id>/extend", methods=["POST"])
+@admin_required
+def extend_subscription(user_id, subscription_id):
+    try:
+        from subscription_helpers import extend_user_subscription
+        success = extend_user_subscription(user_id, subscription_id, 30)
+        if success:
+            flash("✅ Subscription extended by 30 days", "success")
+        else:
+            flash("❌ Could not extend subscription", "error")
+    except Exception as e:
+        flash(f"❌ Error extending subscription: {str(e)}", "error")
+    return redirect(url_for("admin.manage_subscriptions"))
+
+@admin_bp.route("/user/<int:user_id>/subscription/<int:subscription_id>/deactivate", methods=["POST"])
+@admin_required
+def deactivate_subscription(user_id, subscription_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE user_subscriptions SET status='expired', end_date=NOW() WHERE id=%s AND user_id=%s", (subscription_id, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("✅ Subscription deactivated successfully", "success")
+    except Exception as e:
+        flash(f"❌ Error deactivating subscription: {str(e)}", "error")
+    return redirect(url_for("admin.manage_subscriptions"))
+
+@admin_bp.route("/user/<int:user_id>/subscription/<int:subscription_id>/activate", methods=["POST"])
+@admin_required
+def activate_subscription(user_id, subscription_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE user_subscriptions SET status='active', start_date=NOW(), end_date=DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE id=%s AND user_id=%s", (subscription_id, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        flash("✅ Subscription activated successfully", "success")
+    except Exception as e:
+        flash(f"❌ Error activating subscription: {str(e)}", "error")
+    return redirect(url_for("admin.manage_subscriptions"))
 
 @admin_bp.route("/boost-sales")
 @admin_required
@@ -371,10 +543,19 @@ def revenue():
         where_sql = (" WHERE " + " AND ".join(where)) if where else ""
         try:
             cur.execute(f"""
-                SELECT p.id, p.user_id, p.amount, p.method as payment_method, p.status, p.created_at as paid_at,
-                       u.username, u.email
+                SELECT p.id, p.user_id, p.amount, p.method as payment_method, 
+                       COALESCE(p.status, st.payment_status) as status, p.created_at as paid_at,
+                       u.username, u.email,
+                       COALESCE(bp.name, CONCAT('Subscription Plan - ', st.plan_name)) as package_name,
+                       CASE WHEN bp.name IS NOT NULL THEN 'Boost' ELSE 'Subscription' END as transaction_type,
+                       l.status as listing_status,
+                       COALESCE(b.status, '') as promotion_status
                 FROM payments p
                 JOIN users u ON p.user_id = u.id
+                LEFT JOIN listings l ON l.id = p.ad_id
+                LEFT JOIN boost_packages bp ON bp.id = p.package_id
+                LEFT JOIN subscription_transactions st ON st.transaction_id = p.transaction_id AND st.user_id = p.user_id
+                LEFT JOIN ad_boosts b ON b.payment_id = p.id
                 {where_sql}
                 ORDER BY p.created_at DESC
                 LIMIT 200
@@ -389,15 +570,70 @@ def revenue():
                     "id": r["id"],
                     "username": r.get("username", "User"),
                     "email": r.get("email", ""),
-                    "plan": None,
+                    "plan": r.get("package_name"),
                     "amount": amt,
                     "gst": gst,
                     "total_amount": total,
                     "payment_method": r.get("payment_method", "unknown"),
-                    "paid_at": r.get("paid_at")
+                    "paid_at": r.get("paid_at"),
+                    "transaction_type": r.get("transaction_type", "Unknown"),
+                    "status": r.get("status", "unknown"),
+                    "listing_status": r.get("listing_status"),
+                    "promotion_status": r.get("promotion_status")
                 })
         except Exception:
             payments = []
+
+        # Include legacy subscription-only transactions not yet mirrored in payments
+        try:
+            legacy_where = []
+            legacy_params = []
+            if selected_month:
+                legacy_where.append("DATE_FORMAT(st.created_at, '%b %Y') = %s")
+                legacy_params.append(selected_month)
+            if payment_method:
+                legacy_where.append("st.payment_method = %s")
+                legacy_params.append(payment_method)
+            if legacy_where:
+                legacy_sql = "WHERE " + " AND ".join(legacy_where) + " AND p.id IS NULL"
+            else:
+                legacy_sql = "WHERE p.id IS NULL"
+            cur.execute(f"""
+                SELECT st.id, st.user_id, st.amount, st.payment_method, st.payment_status as status, st.created_at as paid_at,
+                       u.username, u.email,
+                       CONCAT('Subscription Plan - ', st.plan_name) as package_name,
+                       'Subscription' as transaction_type
+                FROM subscription_transactions st
+                JOIN users u ON u.id = st.user_id
+                LEFT JOIN payments p ON p.transaction_id = st.transaction_id AND p.user_id = st.user_id
+                {legacy_sql}
+                ORDER BY st.created_at DESC
+                LIMIT 100
+            """, tuple(legacy_params))
+            legacy_rows = cur.fetchall()
+            for r in legacy_rows:
+                amt = float(r["amount"] or 0)
+                gst = round(amt * 0.18, 2)
+                total = round(amt + gst, 2)
+                payments.append({
+                    "id": f"sub_{r['id']}",
+                    "username": r.get("username", "User"),
+                    "email": r.get("email", ""),
+                    "plan": r.get("package_name"),
+                    "amount": amt,
+                    "gst": gst,
+                    "total_amount": total,
+                    "payment_method": r.get("payment_method", "unknown"),
+                    "paid_at": r.get("paid_at"),
+                    "transaction_type": r.get("transaction_type", "Subscription"),
+                    "status": r.get("status", "pending"),
+                    "listing_status": None,
+                    "promotion_status": None
+                })
+        except Exception:
+            pass
+
+        payments.sort(key=lambda x: x.get('paid_at') or datetime.now(), reverse=True)
 
         cur.close()
         conn.close()

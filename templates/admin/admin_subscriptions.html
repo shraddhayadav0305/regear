@@ -6,14 +6,13 @@
 <div class="admin-header mb-4">
     <div>
         <h1 class="mb-2">Seller Subscriptions</h1>
-        <p class="text-muted">Manage active and expired seller subscriptions</p>
+        <p class="text-muted">Manage seller subscription plans and payment records.</p>
     </div>
 </div>
 
-<!-- FILTERS -->
 <div class="card mb-4" style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-    <div class="row g-3">
-        <div class="col-md-6">
+    <div class="row g-3 align-items-center">
+        <div class="col-md-7">
             <a href="{{ url_for('admin.manage_subscriptions', status='all') }}" class="btn {% if status_filter == 'all' or not status_filter %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm">
                 All Subscriptions
             </a>
@@ -27,77 +26,106 @@
                 Expired
             </a>
         </div>
-        <div class="col-md-6 text-end">
+        <div class="col-md-5 text-end">
+            <form class="d-flex justify-content-end mb-2" method="get" action="{{ url_for('admin.manage_subscriptions') }}">
+                <input type="hidden" name="status" value="{{ status_filter }}">
+                <div class="input-group input-group-sm" style="max-width: 320px;">
+                    <input type="text" name="search" class="form-control" placeholder="Search users or plans" value="{{ search }}">
+                    <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i></button>
+                </div>
+            </form>
             <small class="text-muted">Total: {{ total }} subscriptions</small>
         </div>
     </div>
 </div>
 
-<!-- TABLE -->
 <div class="table-responsive card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0 align-middle">
         <thead class="table-light">
             <tr>
-                <th><i class="fas fa-user"></i> Seller Name</th>
-                <th><i class="fas fa-crown"></i> Package</th>
-                <th><i class="fas fa-calendar-plus"></i> Start Date</th>
-                <th><i class="fas fa-calendar-times"></i> Expiry Date</th>
-                <th><i class="fas fa-info-circle"></i> Status</th>
-                <th><i class="fas fa-cog"></i> Actions</th>
+                <th>User</th>
+                <th>Plan</th>
+                <th>Amount Paid</th>
+                <th>Start Date</th>
+                <th>Expiry Date</th>
+                <th>Status</th>
+                <th class="text-end">Actions</th>
             </tr>
         </thead>
         <tbody>
-            {% for sub in subscriptions %}
-            <tr>
-                <td>
-                    <strong>{{ sub.username }}</strong><br>
-                    <small class="text-muted">{{ sub.email }}</small>
-                </td>
-                <td>
-                    <span class="badge bg-primary">{{ sub.seller_package|default('BASIC')|upper }}</span>
-                </td>
-                <td>
-                    {% if sub.subscription_start %}
-                        {{ sub.subscription_start.strftime('%d %b %Y') }}
-                    {% else %}
-                        <span class="text-muted">Not set</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if sub.subscription_end %}
-                        {{ sub.subscription_end.strftime('%d %b %Y') }}
-                    {% else %}
-                        <span class="text-muted">Not set</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if sub.seller_active and sub.subscription_end and sub.subscription_end > now %}
-                        <span class="badge bg-success">Active</span>
-                    {% elif sub.subscription_end and sub.subscription_end <= now %}
-                        <span class="badge bg-danger">Expired</span>
-                    {% else %}
-                        <span class="badge bg-secondary">Inactive</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <div class="btn-group" role="group">
-                        <a href="{{ url_for('admin.view_user', user_id=sub.id) }}" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        {% if sub.seller_active %}
-                        <button class="btn btn-sm btn-outline-warning" onclick="extendSubscription({{ sub.id }})">
-                            <i class="fas fa-clock"></i>
-                        </button>
+            {% if subscriptions %}
+                {% for sub in subscriptions %}
+                <tr>
+                    <td>
+                        <strong>{{ sub.username }}</strong><br>
+                        <small class="text-muted">{{ sub.email }}</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">{{ sub.plan_name or 'Unknown' }}</span>
+                    </td>
+                    <td>
+                        {% if sub.amount_paid and sub.amount_paid > 0 %}
+                            ₹{{ "{:,.2f}".format(sub.amount_paid) }}
+                        {% else %}
+                            <span class="text-muted">N/A</span>
                         {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
+                    </td>
+                    <td>
+                        {% if sub.start_date %}
+                            {{ sub.start_date.strftime('%d %b %Y') }}
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if sub.end_date %}
+                            {{ sub.end_date.strftime('%d %b %Y') }}
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if sub.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% elif sub.is_expired %}
+                            <span class="badge bg-danger">Expired</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group" role="group">
+                            <a href="{{ url_for('admin.view_user', user_id=sub.user_id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            {% if sub.is_active %}
+                                <form action="{{ url_for('admin.extend_subscription', user_id=sub.user_id, subscription_id=sub.id) }}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-warning">Extend</button>
+                                </form>
+                                <form action="{{ url_for('admin.deactivate_subscription', user_id=sub.user_id, subscription_id=sub.id) }}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Deactivate</button>
+                                </form>
+                            {% else %}
+                                <form action="{{ url_for('admin.activate_subscription', user_id=sub.user_id, subscription_id=sub.id) }}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">Activate</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="fas fa-inbox fa-2x mb-2"></i>
+                        <div>No subscriptions found.</div>
+                    </td>
+                </tr>
+            {% endif %}
         </tbody>
     </table>
 </div>
 
-<!-- PAGINATION -->
 {% if total_pages > 1 %}
 <div class="d-flex justify-content-center mt-4">
     <nav>
@@ -107,15 +135,11 @@
                 <a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=current_page-1, status=status_filter) }}">Previous</a>
             </li>
             {% endif %}
-
-            {% set start_page = [1, current_page-2] | max %}
-            {% set end_page = [total_pages+1, current_page+3] | min %}
-            {% for page_num in range(start_page, end_page) %}
+            {% for page_num in range(1, total_pages + 1) %}
             <li class="page-item {% if page_num == current_page %}active{% endif %}">
                 <a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=page_num, status=status_filter) }}">{{ page_num }}</a>
             </li>
             {% endfor %}
-
             {% if current_page < total_pages %}
             <li class="page-item">
                 <a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=current_page+1, status=status_filter) }}">Next</a>
@@ -126,177 +150,46 @@
 </div>
 {% endif %}
 
-<script>
-function extendSubscription(userId) {
-    if (confirm('Extend this seller\'s subscription by 30 days?')) {
-        fetch(`/admin/user/${userId}/extend-subscription`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Error extending subscription: ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        });
+<style>
+    .card {
+        border: none;
     }
-}
-</script>
-
-<style>
-.admin-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 30px;
-    border-radius: 12px;
-    margin-bottom: 20px;
-}
-
-.admin-header h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 10px;
-}
-
-.admin-header p {
-    margin: 0;
-    opacity: 0.9;
-}
-
-.table th {
-    border-top: none;
-    font-weight: 600;
-    color: #374151;
-    padding: 15px;
-}
-
-.table td {
-    padding: 15px;
-    vertical-align: middle;
-}
-
-.btn-group .btn {
-    margin-right: 5px;
-}
-
-.badge {
-    font-size: 0.75rem;
-    padding: 6px 10px;
-}
-</style>
-
-{% endblock %}
-            {% if subscriptions %}
-                {% for user in subscriptions %}
-                <tr>
-                    <td>
-                        <strong>{{ user.username }}</strong>
-                        <br>
-                        <small class="text-muted" style="font-size: 11px;">{{ user.email }}</small>
-                    </td>
-                    <td style="text-align: center;">
-                        <span class="badge bg-info">{{ user.boost_count }}</span>
-                    </td>
-                    <td style="text-align: right;">
-                        <strong style="color: #f59e0b; font-size: 1.1rem;">₹{{ "{:,.0f}".format(user.total_spent|default(0)) }}</strong>
-                    </td>
-                    <td>
-                        {% if user.last_boost_date %}
-                            <small>{{ user.last_boost_date.strftime('%d %b %Y') }}</small>
-                        {% else %}
-                            <small class="text-muted">Never</small>
-                        {% endif %}
-                    </td>
-                    <td style="text-align: center;">
-                        <span class="badge bg-info">{{ user.active_listings }}</span>
-                    </td>
-                    <td style="text-align: center;">
-                        <span class="badge bg-success">{{ user.sold_count }}</span>
-                    </td>
-                    <td>
-                        <a href="{{ url_for('admin.admin_users') }}" class="btn btn-sm btn-outline-primary">View</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="7" class="text-center py-5">
-                        <p class="text-muted mb-0"><i class="fas fa-inbox"></i> No boost activity found</p>
-                    </td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
-</div>
-
-<!-- PAGINATION -->
-{% if total_pages > 1 %}
-<nav class="mt-4">
-    <ul class="pagination justify-content-center">
-        {% for page_num in range(1, total_pages + 1) %}
-            {% if page_num == current_page %}
-                <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
-            {% else %}
-                <li class="page-item"><a class="page-link" href="{{ url_for('admin.manage_subscriptions', page=page_num, status=status_filter) }}">{{ page_num }}</a></li>
-            {% endif %}
-        {% endfor %}
-    </ul>
-</nav>
-{% endif %}
-
-<style>
     .admin-header {
-        padding-bottom: 20px;
-        border-bottom: 2px solid #e5e7eb;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 28px;
+        border-radius: 14px;
+        box-shadow: 0 18px 35px rgba(103, 114, 239, 0.18);
     }
-
     .admin-header h1 {
-        font-weight: 700;
-        color: #1f2937;
+        font-size: 2rem;
+        margin-bottom: 8px;
     }
-
-    @media (max-width: 768px) {
-        .table {
-            font-size: 0.85rem;
-        }
-
-        .badge {
-            padding: 4px 8px;
-            font-size: 10px;
-        }
-    }
-</style>
-
-{% endblock %}
-
-<style>
-    .table-responsive {
-        overflow-x: auto;
-    }
-
-    table th {
-        background: #f3f4f6;
+    .table th {
         font-weight: 600;
-        color: #374151;
-        border-bottom: 2px solid #e5e7eb;
+        color: #334155;
         padding: 16px;
+        background: #f8fafc;
     }
-
-    table td {
+    .table td {
         padding: 16px;
-        color: #6b7280;
-        border-bottom: 1px solid #e5e7eb;
+        vertical-align: middle;
+        border-top: 1px solid #e5e7eb;
     }
-
-    table tbody tr:hover {
-        background: #f9fafb;
+    .table-hover tbody tr:hover {
+        background: #f8fafc;
+    }
+    .badge {
+        min-width: 84px;
+        padding: 8px 10px;
+    }
+    @media (max-width: 768px) {
+        .table th, .table td {
+            font-size: 0.85rem;
+            padding: 10px;
+        }
     }
 </style>
+
 {% endblock %}
+

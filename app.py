@@ -285,11 +285,12 @@ def login():
             if verify_password(db_password, password):
 
                 session["user_id"] = user_id
-                # Treat classic 'admin' username or well-known admin email as admin if role not set properly
+                # Treat admin role paths robustly, including common alternate admin role labels.
                 special_admin_email = (str(email).strip().lower() == "admin@regear.com")
-                is_admin = (role_normalized == "admin") or (str(username).strip().lower() == "admin") or special_admin_email
+                admin_roles = {"admin", "administrator", "superadmin", "owner", "root"}
+                is_admin = (role_normalized in admin_roles) or (str(username).strip().lower() == "admin") or special_admin_email
                 # If special admin email used, ensure role persisted in DB
-                if special_admin_email and role_normalized != "admin":
+                if special_admin_email and role_normalized not in admin_roles:
                     try:
                         conn2 = get_db_connection()
                         c2 = conn2.cursor()
@@ -2020,6 +2021,7 @@ def subscription_success():
 
 # ==================== END SUBSCRIPTION ROUTES ====================
 
+@app.route("/payments", endpoint="payments")
 @app.route("/my-promotions")
 @login_required
 def my_promotions():
@@ -2028,11 +2030,15 @@ def my_promotions():
     history = []
     payments = []
     insights = []
+    active_subscription = None
     try:
         ensure_boost_tables()
     except Exception:
         pass
     try:
+        from subscription_helpers import get_subscription_info
+        active_subscription = get_subscription_info(user_id)
+
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
         cur.execute("""
@@ -2069,16 +2075,56 @@ def my_promotions():
                 rec = dict(r)
                 rec["resolved_status"] = st
                 history.append(rec)
+
         cur.execute("""
-            SELECT pay.id, pay.amount, pay.method as payment_method, pay.transaction_id, pay.status as payment_status, pay.created_at,
-                   l.title as listing_title, bp.name as package_name
+            SELECT pay.id, pay.amount, pay.method as payment_method, pay.transaction_id,
+                   pay.status as payment_status, pay.created_at,
+                   l.title as listing_title, bp.name as package_name,
+                   st.plan_name as subscription_plan_name
             FROM payments pay
             LEFT JOIN listings l ON pay.ad_id=l.id
             LEFT JOIN boost_packages bp ON pay.package_id=bp.id
+            LEFT JOIN subscription_transactions st ON st.transaction_id = pay.transaction_id AND st.user_id = pay.user_id
             WHERE pay.user_id=%s
             ORDER BY pay.created_at DESC
         """, (user_id,))
         payments = cur.fetchall()
+        for p in payments:
+            if not p.get("package_name") and p.get("subscription_plan_name"):
+                p["package_name"] = f"Subscription Plan - {p['subscription_plan_name']}"
+                p["payment_type"] = "subscription"
+            else:
+                p["payment_type"] = "boost"
+            if not p.get("listing_title") and p["payment_type"] == "subscription":
+                p["listing_title"] = "Subscription Plan"
+            p["invoice_available"] = True
+
+        cur.execute("""
+            SELECT id, plan_name, amount, payment_method, payment_status, transaction_id, created_at
+            FROM subscription_transactions
+            WHERE user_id=%s
+              AND transaction_id IS NOT NULL
+              AND transaction_id NOT IN (
+                  SELECT COALESCE(transaction_id, '') FROM payments WHERE user_id=%s
+              )
+            ORDER BY created_at DESC
+        """, (user_id, user_id))
+        legacy_subs = cur.fetchall()
+        for s in legacy_subs:
+            payments.append({
+                "id": f"sub_{s['id']}",
+                "amount": s["amount"],
+                "payment_method": s["payment_method"],
+                "transaction_id": s["transaction_id"],
+                "payment_status": s["payment_status"] or 'success',
+                "created_at": s["created_at"],
+                "listing_title": "Subscription Plan",
+                "package_name": f"Subscription Plan - {s['plan_name']}",
+                "payment_type": "subscription",
+                "invoice_available": False,
+            })
+        payments.sort(key=lambda x: x.get('created_at'), reverse=True)
+
         if active:
             ad_ids = [a["ad_id"] for a in active if a.get("ad_id")]
             if ad_ids:
@@ -2131,8 +2177,8 @@ def my_promotions():
         cur.close()
         conn.close()
     except Exception:
-        active, history, payments, insights = [], [], [], []
-    return render_template("my_promotions.html", active=active, history=history, payments=payments, insights=insights)
+        active, history, payments, insights, active_subscription = [], [], [], [], None
+    return render_template("my_promotions.html", active=active, history=history, payments=payments, insights=insights, active_subscription=active_subscription)
 
 @app.route("/invoice/<int:payment_id>")
 @login_required
@@ -2143,11 +2189,14 @@ def invoice_download(payment_id):
         cur = conn.cursor(dictionary=True)
         cur.execute("""
             SELECT pay.id, pay.user_id, pay.amount, pay.method, pay.transaction_id, pay.created_at, pay.status,
-                   u.username as user_name, l.title as listing_title, bp.name as package_name
+                   u.username as user_name,
+                   l.title as listing_title,
+                   COALESCE(bp.name, CONCAT('Subscription Plan - ', st.plan_name)) as package_name
             FROM payments pay
             JOIN users u ON u.id=pay.user_id
             LEFT JOIN listings l ON l.id=pay.ad_id
             LEFT JOIN boost_packages bp ON bp.id=pay.package_id
+            LEFT JOIN subscription_transactions st ON st.transaction_id = pay.transaction_id AND st.user_id = pay.user_id
             WHERE pay.id=%s
         """, (payment_id,))
         row = cur.fetchone()
@@ -2155,7 +2204,7 @@ def invoice_download(payment_id):
         conn.close()
         if not row or row["user_id"] != user_id:
             flash("❌ Access denied", "error")
-            return redirect(url_for("my_promotions"))
+            return redirect(url_for("payments"))
         html = f"""
         <html><head><meta charset="utf-8"><title>Invoice #{row['id']}</title></head>
         <body style="font-family:Arial, sans-serif; padding:24px;">
@@ -2180,7 +2229,7 @@ def invoice_download(payment_id):
         return resp
     except Exception:
         flash("❌ Could not generate invoice", "error")
-        return redirect(url_for("my_promotions"))
+        return redirect(url_for("payments"))
 
 @app.route("/mark-sold/<int:product_id>")
 @login_required
@@ -2841,27 +2890,10 @@ def profile():
         flash(f"❌ Error: {e}", "error")
         return redirect(url_for('dashboard'))
 
-@app.route("/payments")
-@login_required
-def payments():
-    return redirect(url_for("my_promotions"))
-
 @app.route("/subscription-transactions")
 @login_required
 def subscription_transactions():
-    user_id = session.get('user_id')
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM subscription_transactions WHERE user_id=%s ORDER BY created_at DESC", (user_id,))
-        transactions = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return render_template('subscription_transactions.html', transactions=transactions)
-    except Exception as e:
-        app.logger.error(f"Error loading subscription transactions: {str(e)}")
-        flash("❌ Unable to load transactions at the moment", "error")
-        return redirect(url_for('dashboard'))
+    return redirect(url_for('payments'))
 
 @app.route("/seller/<int:user_id>")
 def seller_profile(user_id):

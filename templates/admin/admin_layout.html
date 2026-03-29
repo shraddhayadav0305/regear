@@ -66,9 +66,17 @@
 
                     <!-- Boosted Listings -->
                     <li class="nav-item mb-2">
-                        <a class="nav-link {% if request.endpoint == 'admin.boosted_listings' %}active{% endif %}" 
+                        <a class="nav-link {% if request.endpoint in ['admin.boosted_listings', 'admin.boosted_ads_alias'] %}active{% endif %}" 
                            href="{{ url_for('admin.boosted_listings') }}">
                             <i class="fas fa-bullhorn"></i> Boosted Listings
+                        </a>
+                    </li>
+
+                    <!-- Seller Subscriptions -->
+                    <li class="nav-item mb-2">
+                        <a class="nav-link {% if request.endpoint == 'admin.manage_subscriptions' %}active{% endif %}" 
+                           href="{{ url_for('admin.manage_subscriptions') }}">
+                            <i class="fas fa-crown"></i> Seller Subscriptions
                         </a>
                     </li>
 
@@ -93,7 +101,7 @@
 
                     <!-- Transactions & Revenue -->
                     <li class="nav-item mb-2">
-                        <a class="nav-link {% if request.endpoint == 'admin.revenue' %}active{% endif %}"
+                        <a class="nav-link {% if request.endpoint in ['admin.revenue', 'admin.boost_sales'] %}active{% endif %}"
                            href="{{ url_for('admin.revenue') }}">
                             <i class="fas fa-wallet"></i> Transactions & Revenue
                         </a>

@@ -488,7 +488,7 @@
                             {% if role == 'seller' %}
                             <a href="{{ url_for('seller_plans') }}"><i class="fas fa-rocket"></i> Seller Plans</a>
                             {% endif %}
-                            <a href="{{ url_for('payments') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
+                            <a href="{{ url_for('my_promotions') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
                         </div>
                         <div class="profile-divider"></div>
                         <div class="profile-menu">
@@ -512,7 +512,7 @@
         <a class="sidebar-link {% if request.path.startswith('/favorites') or request.path == '/saved' %}sidebar-active{% endif %}" href="{{ url_for('favorites') }}"><i class="fas fa-heart"></i> Favorites</a>
         <a class="sidebar-link {% if request.path.startswith('/messages') %}sidebar-active{% endif %}" href="{{ url_for('messages_list') }}"><i class="fas fa-comments"></i> Messages</a>
         <a class="sidebar-link {% if request.path.startswith('/profile') %}sidebar-active{% endif %}" href="{{ url_for('profile') }}"><i class="fas fa-user"></i> My Profile</a>
-        <a class="sidebar-link {% if request.path.startswith('/payments') %}sidebar-active{% endif %}" href="{{ url_for('payments') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
+        <a class="sidebar-link {% if request.path.startswith('/payments') or request.path.startswith('/my-promotions') %}sidebar-active{% endif %}" href="{{ url_for('my_promotions') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
         <a class="sidebar-link" href="{{ url_for('profile') }}"><i class="fas fa-cog"></i> Settings</a>
         <a class="sidebar-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </aside>

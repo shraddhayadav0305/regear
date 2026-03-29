@@ -33,7 +33,7 @@
       <div class="col-12">
         <div class="section-card p-3">
           <h5 class="mb-3"><i class="fas fa-bullhorn text-danger"></i> Active Promotions</h5>
-          {% if active and active|length>0 %}
+          {% if (active and active|length>0) or active_subscription %}
             <div class="row g-3">
               {% for a in active %}
               <div class="col-12">
@@ -50,6 +50,18 @@
                 </div>
               </div>
               {% endfor %}
+              {% if active_subscription %}
+              <div class="col-12">
+                <div class="promo-card d-flex align-items-center justify-content-between">
+                  <div>
+                    <div class="fw-semibold">Subscription Active: {{ active_subscription.plan_name }}</div>
+                    <div class="small muted">Boost limit: {{ active_subscription.ad_limit if active_subscription.ad_limit != -1 else 'Unlimited' }}</div>
+                    <div class="small">Remaining: {{ active_subscription.remaining if active_subscription.remaining != -1 else 'Unlimited' }} • Expires: {{ active_subscription.end_date }}</div>
+                  </div>
+                  <span class="badge badge-active pill">Active</span>
+                </div>
+              </div>
+              {% endif %}
             </div>
           {% else %}
             <div class="text-center text-muted py-4">No active promotions currently.</div>
@@ -128,7 +140,9 @@
                     {% else %}
                       <span class="badge badge-expired pill">{{ p.payment_status|capitalize }}</span>
                     {% endif %}
-                    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoice_download', payment_id=p.id) }}"><i class="fas fa-file-invoice"></i> Download Invoice</a>
+                    {% if p.invoice_available %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoice_download', payment_id=p.id) }}"><i class="fas fa-file-invoice"></i> Download Invoice</a>
+                    {% endif %}
                   </div>
                 </div>
               </div>

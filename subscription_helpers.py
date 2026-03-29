@@ -248,6 +248,11 @@ def record_subscription_transaction(user_id, plan_name, amount, duration_days, p
             (user_id, plan_name, amount, duration_days, payment_method, payment_status, transaction_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (user_id, plan_name, amount, duration_days, payment_method, payment_status, transaction_id))
+        cursor.execute("""
+            INSERT INTO payments 
+            (user_id, amount, method, transaction_id, status, created_at)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+        """, (user_id, amount, payment_method, transaction_id, payment_status))
         
         conn.commit()
         cursor.close()
