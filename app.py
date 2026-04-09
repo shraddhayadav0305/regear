@@ -2,11 +2,19 @@ from flask import Flask, render_template, request, redirect, session, flash, url
 import mysql.connector
 from mysql.connector import Error as MySQLError
 import hashlib
+import re
 from functools import wraps
 from datetime import datetime, timedelta
 import secrets
 import os
 from werkzeug.utils import secure_filename
+
+from transactions_helpers import (
+    map_payment_method,
+    map_transaction_status,
+    calculate_gst,
+    calculate_total
+)
 
 # Import models
 from models import db, Ad
@@ -46,8 +54,15 @@ def verify_password(stored_hash, password):
         return stored_hash == hashlib.sha256(password.encode()).hexdigest() or stored_hash == password
 
 def slugify(text):
-    """Convert text to URL-friendly slug (lowercase, spaces to underscores)"""
-    return text.lower().replace(' ', '_').replace('&', 'and')
+    """Convert text to URL-friendly slug (lowercase, spaces to hyphens)."""
+    if text is None:
+        return ''
+    slug = text.lower().strip()
+    slug = re.sub(r'&+', 'and', slug)
+    slug = re.sub(r'[\s_]+', '-', slug)
+    slug = re.sub(r'[^a-z0-9\-]', '', slug)
+    slug = re.sub(r'-{2,}', '-', slug)
+    return slug.strip('-')
 
 # Database connection
 def get_db_connection():
@@ -68,6 +83,43 @@ def get_db_connection():
         app.logger.error(f"DB connection failed (host={host} user={user} db={database}): {e}")
         # Re-raise so callers can handle the exception and show user-friendly messages
         raise
+
+
+def ensure_transactions_table(cursor):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            type ENUM('subscription','boost') NOT NULL,
+            reference_id INT NULL,
+            base_amount DECIMAL(10,2) NOT NULL,
+            gst_amount DECIMAL(10,2) NOT NULL,
+            total_amount DECIMAL(10,2) NOT NULL,
+            payment_method ENUM('UPI','Card','Wallet') NOT NULL,
+            status ENUM('completed','failed','refunded') NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_transactions_status (status),
+            INDEX idx_transactions_type (type),
+            INDEX idx_transactions_payment_method (payment_method),
+            INDEX idx_transactions_created_at (created_at)
+        )
+    """)
+
+
+def insert_transaction_record(cursor, user_id, tx_type, reference_id, base_amount, payment_method, status='completed', created_at=None):
+    ensure_transactions_table(cursor)
+    gst_amount = calculate_gst(base_amount)
+    total_amount = calculate_total(base_amount)
+    payment_method_clean = map_payment_method(payment_method)
+    transaction_status = map_transaction_status(status)
+    params = [user_id, tx_type, reference_id, float(base_amount), gst_amount, total_amount, payment_method_clean, transaction_status]
+    sql = """
+        INSERT INTO transactions
+        (user_id, type, reference_id, base_amount, gst_amount, total_amount, payment_method, status, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+    """
+    cursor.execute(sql, tuple(params))
+    return cursor.lastrowid
 
 # Login required decorator
 def login_required(f):
@@ -145,10 +197,21 @@ def home():
         # Fetch all listings ordered by newest first, showing all for immediate appearance
         try:
             cursor.execute("""
-                SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, l.view_count, u.username
+                SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, l.view_count, u.username,
+                       CASE WHEN b.ad_id IS NULL THEN 0 ELSE 1 END AS is_boosted,
+                       COALESCE(l.is_featured, 0) AS is_featured,
+                       b.expiry_date AS boost_expiry
                 FROM listings l
                 LEFT JOIN users u ON l.user_id = u.id
-                ORDER BY l.created_at DESC
+                LEFT JOIN (
+                    SELECT ad_id, MAX(expiry_date) AS expiry_date
+                    FROM ad_boosts
+                    WHERE status = 'active' AND expiry_date > NOW()
+                    GROUP BY ad_id
+                ) b ON b.ad_id = l.id
+                WHERE l.approval_status = 'approved' AND l.status = 'active'
+                  AND (b.ad_id IS NOT NULL OR l.created_at >= DATE_SUB(NOW(), INTERVAL 5 DAY))
+                ORDER BY is_boosted DESC, l.is_featured DESC, b.expiry_date DESC, l.created_at DESC
                 LIMIT 24
             """)
             featured_listings = cursor.fetchall()
@@ -162,6 +225,57 @@ def home():
     except Exception as e:
         print(f"Error loading homepage: {e}")
         return render_template("homepg.html", featured_listings=[])
+
+@app.route('/api/homepage-ads')
+def api_homepage_ads():
+    """Return homepage listing cards with boosted ads first."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos, l.view_count,
+                   COALESCE(l.is_featured, 0) AS is_featured,
+                   CASE WHEN b.expiry_date IS NOT NULL THEN 1 ELSE 0 END AS is_boosted,
+                   b.expiry_date AS boost_expiry
+            FROM listings l
+            LEFT JOIN (
+                SELECT ad_id, MAX(expiry_date) AS expiry_date
+                FROM ad_boosts
+                WHERE status = 'active' AND expiry_date > NOW()
+                GROUP BY ad_id
+            ) b ON b.ad_id = l.id
+            WHERE l.approval_status = 'approved'
+              AND l.status = 'active'
+              AND (b.ad_id IS NOT NULL OR l.created_at >= DATE_SUB(NOW(), INTERVAL 5 DAY))
+            ORDER BY is_boosted DESC, l.created_at DESC
+            LIMIT 24
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        wishlist_ids = session.get('wishlist', []) if isinstance(session.get('wishlist', []), list) else []
+        listings = []
+        for row in rows:
+            listings.append({
+                'id': row.get('id'),
+                'title': row.get('title'),
+                'category': row.get('category'),
+                'subcategory': row.get('subcategory'),
+                'price': float(row.get('price') or 0),
+                'location': row.get('location'),
+                'created_at': row.get('created_at').isoformat() if row.get('created_at') else None,
+                'photos': row.get('photos'),
+                'view_count': int(row.get('view_count') or 0),
+                'is_boosted': bool(row.get('is_boosted')),
+                'is_featured': bool(row.get('is_featured')),
+                'boost_expiry': row.get('boost_expiry').isoformat() if row.get('boost_expiry') else None,
+                'in_wishlist': row.get('id') in wishlist_ids
+            })
+        return jsonify({'listings': listings})
+    except Exception as e:
+        app.logger.error(f"Error in /api/homepage-ads: {e}")
+        return jsonify({'listings': [], 'error': str(e)}), 500
 
 
 # fee mapping for seller packages (package -> ₹ fee)
@@ -300,7 +414,7 @@ def login():
                         conn2.close()
                     except Exception:
                         pass
-                session["role"] = "admin" if is_admin else "user"
+                session["role"] = "admin" if is_admin else (role_normalized or "user")
                 session["username"] = username
                 session["profile_photo"] = profile_photo
 
@@ -554,16 +668,17 @@ def get_categories():
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, icon FROM categories ORDER BY name")
+        cursor.execute("SELECT id, name, icon, slug FROM categories ORDER BY name")
         categories = cursor.fetchall()
         
         result = {}
         for cat in categories:
             cat_id = cat['id']
             cat_name = cat['name']
+            cat_slug = cat.get('slug') or slugify(cat_name)
             # Fetch subcategories for this category
             cursor.execute(
-                "SELECT id, name FROM subcategories WHERE category_id = %s ORDER BY name",
+                "SELECT id, name, slug FROM subcategories WHERE category_id = %s ORDER BY name",
                 (cat_id,)
             )
             subcats = cursor.fetchall()
@@ -579,8 +694,15 @@ def get_categories():
                 'icon': cat['icon'],
                 'image': cat_image,
                 'id': cat_id,
-                'slug': slugify(cat_name),
-                'subcategories': [{'id': s['id'], 'name': s['name'], 'slug': slugify(s['name'])} for s in subcats]
+                'slug': cat_slug,
+                'subcategories': [
+                    {
+                        'id': s['id'],
+                        'name': s['name'],
+                        'slug': s.get('slug') or slugify(s['name'])
+                    }
+                    for s in subcats
+                ]
             }
         
         cursor.close()
@@ -801,6 +923,7 @@ def my_listings():
             SELECT l.id, l.title, l.category, l.subcategory, l.price, l.status, l.approval_status, 
                    l.created_at, l.photos, l.location, l.boost_type, l.boost_expires_date,
                    l.boost_priority, l.is_featured, l.is_urgent, l.view_count,
+                   COALESCE(l.is_sold, 0) AS is_sold,
                    CASE WHEN l.boost_expires_date > NOW() THEN 1 ELSE 0 END AS is_boosted
             FROM listings l
             WHERE l.user_id = %s
@@ -860,12 +983,26 @@ def my_listings():
         listings = cursor.fetchall()
         
         # Enrich listings with additional info
+        now = datetime.now()
         for listing in listings:
-            listing['days_active'] = 0
+            listing['is_boosted'] = bool(listing.get('is_boosted'))
+            listing['boosted'] = listing['is_boosted']
+            listing['boost_expires'] = listing.get('boost_expires_date')
+            if listing.get('created_at'):
+                listing['days_active'] = max(0, (now - listing['created_at']).days)
+            else:
+                listing['days_active'] = 0
             listing['favorites_count'] = 0
             listing['messages_count'] = 0
-            listing['days_remaining'] = None
             listing['performance_percent'] = 0
+            if listing['is_boosted'] and listing.get('boost_expires_date'):
+                delta = listing['boost_expires_date'] - now
+                if delta.total_seconds() > 0:
+                    listing['days_remaining'] = max(0, int(delta.days) + (1 if delta.seconds > 0 else 0))
+                else:
+                    listing['days_remaining'] = 0
+            else:
+                listing['days_remaining'] = None
         
         cursor.close()
         conn.close()
@@ -938,7 +1075,7 @@ def browse():
             FROM listings l
             JOIN users u ON l.user_id = u.id
             LEFT JOIN ad_boosts b ON b.ad_id=l.id AND b.status='active' AND b.expiry_date>NOW()
-            WHERE l.approval_status='approved' AND l.status='active'
+            WHERE l.status='active'
         """
         params = []
         
@@ -985,25 +1122,46 @@ def category_page(category_slug):
     try:
         # 1. Standardize the slug
         cat_slug = slugify(category_slug)
-        app.logger.info(f"DEBUG: Category Page Hit - Original: {category_slug}, Slug: {cat_slug}")
+        cat_slug_hyphen = cat_slug.replace('_', '-')
+        cat_slug_underscore = cat_slug.replace('-', '_')
+        app.logger.info(f"DEBUG: Category Page Hit - Original: {category_slug}, Slug: {cat_slug}, Hyphen: {cat_slug_hyphen}, Underscore: {cat_slug_underscore}")
         
         # 2. Get all filter parameters
         search = request.args.get('search', '').strip()
         min_price = request.args.get('min_price', type=float)
         max_price = request.args.get('max_price', type=float)
         sort = request.args.get('sort', 'latest')
+        condition = request.args.get('condition', '').strip()
         
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+
+        cursor.execute(
+            "SELECT id, name FROM categories WHERE slug=%s OR slug=%s OR slug=%s",
+            (cat_slug, cat_slug_hyphen, cat_slug_underscore)
+        )
+        category = cursor.fetchone()
+        if not category:
+            flash("❌ Category not found", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("home"))
+
+        category_name = category['name']
+        display_name = category_name
+
         query = """
             SELECT l.id, l.title, l.category, l.subcategory, l.price, l.location, l.created_at, l.photos,
                    CASE WHEN b.id IS NULL THEN 0 ELSE 1 END AS is_boosted,
                    b.expiry_date AS boost_expiry
             FROM listings l
             LEFT JOIN ad_boosts b ON b.ad_id=l.id AND b.status='active' AND b.expiry_date>NOW()
-            WHERE l.approval_status='approved' AND l.status='active' AND l.category=%s
+            WHERE l.status='active' AND (
+                  LOWER(l.category)=LOWER(%s) OR LOWER(l.category)=LOWER(%s) OR LOWER(l.category)=LOWER(%s)
+                  OR LOWER(REPLACE(REPLACE(l.category, ' ', '-'), '_', '-')) = LOWER(%s)
+            )
         """
-        params = [cat]
+        params = [category_name, cat_slug_hyphen, cat_slug_underscore, cat_slug_hyphen]
         if min_price is not None:
             query += " AND l.price >= %s"
             params.append(min_price)
@@ -1312,7 +1470,8 @@ def boost_listing(listing_id):
         
         # Get listing details
         cursor.execute("""
-            SELECT id, user_id, title, price, photos, category, subcategory, description
+            SELECT id, user_id, title, price, photos, category, subcategory, description,
+                   status, approval_status, COALESCE(is_sold, 0) AS is_sold
             FROM listings
             WHERE id = %s
         """, (listing_id,))
@@ -1324,6 +1483,13 @@ def boost_listing(listing_id):
             cursor.close()
             conn.close()
             return redirect(url_for("my_listings"))
+
+        if listing.get('status') != 'active' or listing.get('is_sold') or listing.get('approval_status') != 'approved':
+            error_message = "This listing cannot be boosted because it is not active, approved, or it has already been sold."
+            listing['error_message'] = error_message
+            cursor.close()
+            conn.close()
+            return render_template("boost_packages.html", listing=listing, boost_error_message=error_message)
         
         # Check ownership
         if listing['user_id'] != user_id:
@@ -1351,7 +1517,8 @@ def apply_boost(listing_id):
     
     try:
         from subscription_helpers import (
-            get_user_active_subscription, 
+            get_user_active_subscription,
+            can_user_boost_ad,
             increment_subscription_boost_count,
             mark_expired_subscriptions
         )
@@ -1376,7 +1543,8 @@ def apply_boost(listing_id):
         
         # Verify listing ownership
         cursor.execute("""
-            SELECT id, user_id FROM listings WHERE id = %s
+            SELECT id, user_id, status, approval_status, COALESCE(is_sold, 0) AS is_sold
+            FROM listings WHERE id = %s
         """, (listing_id,))
         
         listing = cursor.fetchone()
@@ -1386,22 +1554,30 @@ def apply_boost(listing_id):
             cursor.close()
             conn.close()
             return redirect(url_for("my_listings"))
+
+        if listing.get('status') != 'active' or listing.get('is_sold') or listing.get('approval_status') != 'approved':
+            flash("❌ Only active, approved and unsold listings can be boosted.", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("my_listings"))
+
+        cursor.execute("SELECT COUNT(*) AS c FROM ad_boosts WHERE ad_id=%s AND status='active' AND expiry_date > NOW()", (listing_id,))
+        existing_boost = cursor.fetchone()
+        if existing_boost and existing_boost.get('c', 0) > 0:
+            flash("❌ This listing already has an active boost. Please wait until it expires or manage your existing boost.", "error")
+            cursor.close()
+            conn.close()
+            return redirect(url_for("my_listings"))
         
-        # Check subscription limit
-        subscription = get_user_active_subscription(user_id)
-        subscription_id = None
-        
-        if subscription:
-            # User has active subscription
-            if subscription['ad_limit'] != -1:
-                # Check if limit reached
-                if subscription['ads_used'] >= subscription['ad_limit']:
-                    cursor.close()
-                    conn.close()
-                    flash(f"❌ You have reached your boost limit ({subscription['ad_limit']}/month). Upgrade your plan or wait for renewal.", "error")
-                    return redirect(url_for("boost_listing", listing_id=listing_id))
-            subscription_id = subscription['id']
-        
+        # Check subscription boost allowance
+        can_boost, subscription, reason = can_user_boost_ad(user_id)
+        if not can_boost:
+            cursor.close()
+            conn.close()
+            flash(f"❌ {reason}", "error")
+            return redirect(url_for("boost_listing", listing_id=listing_id))
+        subscription_id = subscription['id'] if subscription else None
+
         # Calculate boost end date
         from datetime import datetime, timedelta
         boost_until = datetime.now() + timedelta(days=days)
@@ -1421,12 +1597,11 @@ def apply_boost(listing_id):
             VALUES (%s, %s, %s, 'active', NOW(), %s, NOW())
         """, (user_id, listing_id, subscription_id, boost_until))
         
-        # If Featured or Super Boost, also insert into boosted_listings
-        if is_featured or boost_type == 'super':
-            cursor.execute("""
-                INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
-                VALUES (%s, %s, %s, NOW(), %s, 'active', NOW())
-            """, (listing_id, user_id, boost_type, boost_until))
+        # Record this boost for admin reporting
+        cursor.execute("""
+            INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
+            VALUES (%s, %s, %s, NOW(), %s, 'active', NOW())
+        """, (listing_id, user_id, boost_type, boost_until))
         
         conn.commit()
         cursor.close()
@@ -1451,9 +1626,11 @@ def apply_boost(listing_id):
         boost_name = boost_names.get(boost_type, boost_type.capitalize() + ' Boost')
         
         if subscription:
-            remaining = subscription['ad_limit'] - (subscription['ads_used'] + 1) if subscription['ad_limit'] != -1 else -1
+            used = subscription.get('boosts_used', subscription.get('ads_used', 0))
+            limit = subscription.get('boost_limit', subscription.get('ad_limit', 0))
+            remaining = limit - (used + 1) if limit != -1 else -1
             if remaining >= 0:
-                flash(f"✅ {boost_name} activated! Your ad will appear at the top. Remaining boosts: {remaining}/{subscription['ad_limit']}.", "success")
+                flash(f"✅ {boost_name} activated! Your ad will appear at the top. Remaining boosts: {remaining}/{limit}.", "success")
             else:
                 flash(f"✅ {boost_name} activated! Your ad will appear at the top.", "success")
         else:
@@ -1473,9 +1650,10 @@ def buy_boost(package_id, ad_id):
     except Exception:
         pass
     try:
+        from subscription_helpers import can_user_boost_ad, mark_expired_subscriptions, increment_subscription_boost_count
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT id, user_id FROM listings WHERE id=%s", (ad_id,))
+        cur.execute("""SELECT id, user_id, status, approval_status, COALESCE(is_sold, 0) AS is_sold FROM listings WHERE id=%s""", (ad_id,))
         listing = cur.fetchone()
         if not listing:
             cur.close()
@@ -1487,6 +1665,28 @@ def buy_boost(package_id, ad_id):
             conn.close()
             flash("❌ You can only boost your own listing", "error")
             return redirect(url_for("my_listings"))
+        if listing.get('status') != 'active' or listing.get('is_sold') or listing.get('approval_status') != 'approved':
+            cur.close()
+            conn.close()
+            flash("❌ Only active, approved and unsold listings can be boosted.", "error")
+            return redirect(url_for("my_listings"))
+        cur.execute("SELECT COUNT(*) AS c FROM ad_boosts WHERE ad_id=%s AND status='active' AND expiry_date > NOW()", (ad_id,))
+        existing = cur.fetchone()
+        if existing and existing.get('c', 0) > 0:
+            cur.close()
+            conn.close()
+            flash("❌ This listing already has an active boost. Please wait until it expires.", "error")
+            return redirect(url_for("my_listings"))
+
+        mark_expired_subscriptions(user_id)
+        can_boost, subscription, reason = can_user_boost_ad(user_id)
+        if not can_boost:
+            cur.close()
+            conn.close()
+            flash(f"❌ {reason}", "error")
+            return redirect(url_for("boost_listing", listing_id=ad_id))
+        subscription_id = subscription['id']
+
         cur.execute("SELECT * FROM boost_packages WHERE id=%s", (package_id,))
         pkg = cur.fetchone()
         if not pkg:
@@ -1500,9 +1700,11 @@ def buy_boost(package_id, ad_id):
         )
         payment_id = cur.lastrowid
         cur.execute(
-            "INSERT INTO ad_boosts (user_id, ad_id, package_id, payment_id, start_date, expiry_date, status, created_at) VALUES (%s,%s,%s,%s,NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())",
-            (user_id, ad_id, pkg["id"], payment_id, int(pkg["duration_days"]))
+            "INSERT INTO ad_boosts (user_id, ad_id, subscription_id, package_id, payment_id, start_date, expiry_date, status, created_at) VALUES (%s,%s,%s,%s,%s,NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())",
+            (user_id, ad_id, subscription_id, pkg["id"], payment_id, int(pkg["duration_days"]))
         )
+        boost_id = cur.lastrowid
+        insert_transaction_record(cur, user_id, 'boost', boost_id, float(pkg['price']), 'upi', status='completed')
         
         # Also insert into boosted_listings table for Admin Panel
         cur.execute("""
@@ -1513,6 +1715,7 @@ def buy_boost(package_id, ad_id):
         conn.commit()
         cur.close()
         conn.close()
+        increment_subscription_boost_count(user_id, subscription_id)
         return redirect(url_for("payment_success"))
     except Exception as e:
         try:
@@ -1535,10 +1738,43 @@ def checkout(package_id, ad_id):
     except Exception:
         pass
     try:
+        from subscription_helpers import can_user_boost_ad, mark_expired_subscriptions, increment_subscription_boost_count
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT id, user_id, title, price FROM listings WHERE id=%s", (ad_id,))
+        cur.execute("""SELECT id, user_id, status, approval_status, COALESCE(is_sold, 0) AS is_sold FROM listings WHERE id=%s""", (ad_id,))
         ad = cur.fetchone()
+        if not ad:
+            cur.close()
+            conn.close()
+            flash("❌ Listing not found", "error")
+            return redirect(url_for("my_listings"))
+        if ad["user_id"] != user_id:
+            cur.close()
+            conn.close()
+            flash("❌ You can only boost your own listing", "error")
+            return redirect(url_for("my_listings"))
+        if ad.get('status') != 'active' or ad.get('is_sold') or ad.get('approval_status') != 'approved':
+            cur.close()
+            conn.close()
+            flash("❌ Only active, approved and unsold listings can be boosted.", "error")
+            return redirect(url_for("my_listings"))
+        cur.execute("SELECT COUNT(*) AS c FROM ad_boosts WHERE ad_id=%s AND status='active' AND expiry_date > NOW()", (ad_id,))
+        existing = cur.fetchone()
+        if existing and existing.get('c', 0) > 0:
+            cur.close()
+            conn.close()
+            flash("❌ This listing already has an active boost. Please wait until it expires.", "error")
+            return redirect(url_for("my_listings"))
+
+        mark_expired_subscriptions(user_id)
+        can_boost, subscription, reason = can_user_boost_ad(user_id)
+        if not can_boost:
+            cur.close()
+            conn.close()
+            flash(f"❌ {reason}", "error")
+            return redirect(url_for("boost_listing", listing_id=ad_id))
+        subscription_id = subscription['id']
+
         cur.execute("SELECT * FROM boost_packages WHERE id=%s", (package_id,))
         pkg = cur.fetchone()
         if not ad or not pkg:
@@ -1552,6 +1788,14 @@ def checkout(package_id, ad_id):
             flash("❌ You can only boost your own ad", "error")
             return redirect(url_for("my_listings"))
         if request.method == "POST":
+            mark_expired_subscriptions(user_id)
+            can_boost, subscription, reason = can_user_boost_ad(user_id)
+            if not can_boost:
+                cur.close()
+                conn.close()
+                flash(f"❌ {reason}", "error")
+                return redirect(url_for("boost_listing", listing_id=ad_id))
+            subscription_id = subscription['id']
             method = (request.form.get("payment_method") or "upi").lower()
             txid = secrets.token_hex(8)
             cur.execute("""
@@ -1560,9 +1804,11 @@ def checkout(package_id, ad_id):
             """, (user_id, ad_id, pkg["id"], float(pkg["price"]), method, txid))
             payment_id = cur.lastrowid
             cur.execute("""
-                INSERT INTO ad_boosts (user_id, ad_id, package_id, payment_id, start_date, expiry_date, status, created_at)
-                VALUES (%s,%s,%s,%s,NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())
-            """, (user_id, ad_id, pkg["id"], payment_id, int(pkg["duration_days"])))
+                INSERT INTO ad_boosts (user_id, ad_id, subscription_id, package_id, payment_id, start_date, expiry_date, status, created_at)
+                VALUES (%s,%s,%s,%s,%s,NOW(), DATE_ADD(NOW(), INTERVAL %s DAY), 'active', NOW())
+            """, (user_id, ad_id, subscription_id, pkg["id"], payment_id, int(pkg["duration_days"])))
+            boost_id = cur.lastrowid
+            insert_transaction_record(cur, user_id, 'boost', boost_id, float(pkg['price']), method, status='completed')
 
             # Also insert into boosted_listings table for Admin Panel
             cur.execute("""
@@ -1573,6 +1819,7 @@ def checkout(package_id, ad_id):
             conn.commit()
             cur.close()
             conn.close()
+            increment_subscription_boost_count(user_id, subscription_id)
             return redirect(url_for("payment_success"))
         cur.close()
         conn.close()
@@ -1592,7 +1839,8 @@ def checkout(package_id, ad_id):
 def payment_page():
     """Display payment page with order summary and payment method selection"""
     user_id = session.get('user_id')
-    
+    from subscription_helpers import can_user_boost_ad, mark_expired_subscriptions
+
     try:
         if request.method == "POST":
             # Receive plan data from form submission
@@ -1622,6 +1870,12 @@ def payment_page():
             if not ad or ad['user_id'] != user_id:
                 flash("❌ Unauthorized action", "error")
                 return redirect(url_for("my_listings"))
+
+            # Enforce subscription-based boost allowance before showing checkout
+            mark_expired_subscriptions(user_id)
+            can_boost, subscription, reason = can_user_boost_ad(user_id)
+            # Note: We allow boost without subscription - it's a one-time purchase
+            # Subscriptions just give free/discounted boosts, but boosts can be purchased independently
             
             # Plan names mapping with icons
             plan_icons = {
@@ -1701,7 +1955,8 @@ def payment_page():
 def process_payment():
     """Process payment and apply boost to listing"""
     user_id = session.get('user_id')
-    
+    from subscription_helpers import can_user_boost_ad, mark_expired_subscriptions, increment_subscription_boost_count
+
     try:
         # Get payment data from form (primary) or session (fallback)
         ad_id = request.form.get('ad_id') or (session.get('payment_data', {}).get('ad_id') if session.get('payment_data') else None)
@@ -1721,9 +1976,7 @@ def process_payment():
         # Verify listing ownership
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT id, user_id FROM listings WHERE id=%s
-        """, (ad_id,))
+        cursor.execute("""SELECT id, user_id, status, approval_status, COALESCE(is_sold, 0) AS is_sold FROM listings WHERE id=%s""", (ad_id,))
         
         listing = cursor.fetchone()
         if not listing or listing['user_id'] != user_id:
@@ -1731,6 +1984,24 @@ def process_payment():
             conn.close()
             flash("❌ Unauthorized action", "error")
             return redirect(url_for("my_listings"))
+        if listing.get('status') != 'active' or listing.get('is_sold') or listing.get('approval_status') != 'approved':
+            cursor.close()
+            conn.close()
+            flash("❌ Only active, approved and unsold listings can be boosted.", "error")
+            return redirect(url_for("my_listings"))
+        cursor.execute("SELECT COUNT(*) AS c FROM ad_boosts WHERE ad_id=%s AND status='active' AND expiry_date > NOW()", (ad_id,))
+        existing = cursor.fetchone()
+        if existing and existing.get('c', 0) > 0:
+            cursor.close()
+            conn.close()
+            flash("❌ This listing already has an active boost. Please wait until it expires.", "error")
+            return redirect(url_for("my_listings"))
+
+        mark_expired_subscriptions(user_id)
+        # Check if user has subscription (optional for one-time boost purchase)
+        can_boost, subscription, reason = can_user_boost_ad(user_id)
+        # Allow boost even without subscription - it's a one-time purchase
+        subscription_id = subscription['id'] if subscription else None
         
         # Generate transaction ID
         import secrets
@@ -1759,21 +2030,25 @@ def process_payment():
         
         # Insert into ad_boosts for tracking
         cursor.execute("""
-            INSERT INTO ad_boosts (user_id, ad_id, package_id, payment_id, status, start_date, expiry_date, created_at)
-            VALUES (%s, %s, 0, %s, 'active', NOW(), %s, NOW())
-        """, (user_id, int(ad_id), payment_id, boost_until))
-        
-        # If featured or super boost, also insert homepage feature record
-        if is_featured or plan == 'super':
-            cursor.execute("""
-                INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
-                VALUES (%s, %s, %s, NOW(), %s, 'active', NOW())
-            """, (int(ad_id), user_id, plan, boost_until))
+            INSERT INTO ad_boosts (user_id, ad_id, subscription_id, package_id, payment_id, status, start_date, expiry_date, created_at)
+            VALUES (%s, %s, %s, 0, %s, 'active', NOW(), %s, NOW())
+        """, (user_id, int(ad_id), subscription_id, payment_id, boost_until))
+        boost_id = cursor.lastrowid
+        insert_transaction_record(cursor, user_id, 'boost', boost_id, price, payment_method, status='completed')
+
+        # Record this boost for admin reporting
+        cursor.execute("""
+            INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
+            VALUES (%s, %s, %s, NOW(), %s, 'active', NOW())
+        """, (int(ad_id), user_id, plan, boost_until))
         
         conn.commit()
         cursor.close()
         conn.close()
         
+        if subscription_id:
+            increment_subscription_boost_count(user_id, subscription_id)
+
         # Clear session payment data
         if 'payment_data' in session:
             del session['payment_data']
@@ -1814,8 +2089,9 @@ def payment_success():
 def seller_packages():
     """Display seller subscription packages page"""
     user_id = session.get('user_id')
-    from subscription_helpers import get_user_active_subscription, get_plan_details
+    from subscription_helpers import get_user_active_subscription, get_plan_details, mark_expired_subscriptions
     try:
+        mark_expired_subscriptions(user_id)
         active_subscription = get_user_active_subscription(user_id)
         active_price = 0
         if active_subscription:
@@ -1857,7 +2133,8 @@ def subscription_payment():
         duration_days = int(request.form.get('duration_days', request.form.get('period_days', 0) or 0))
         
         # Validate input
-        if not plan_name or price <= 0 or duration_days <= 0:
+        plan_details = get_plan_details(plan_name)
+        if not plan_name or price <= 0 or duration_days <= 0 or plan_details['price'] != price:
             flash("❌ Invalid plan data", "error")
             return redirect(url_for("seller_packages"))
 
@@ -1936,8 +2213,8 @@ def process_subscription_payment():
         # Generate transaction ID
         transaction_id = secrets.token_hex(8).upper()
         
-        # Record transaction
-        record_subscription_transaction(
+        # Record subscription transaction and get the subscription transaction id
+        subscription_tx_id = record_subscription_transaction(
             user_id=user_id,
             plan_name=plan_name,
             amount=price,
@@ -1979,7 +2256,7 @@ def process_subscription_payment():
                 flash("❌ Error activating subscription", "error")
                 return redirect(url_for("seller_packages"))
             operation_text = 'Subscription activated successfully.'
-        
+
         # Save success info for success page
         session['subscription_success'] = {
             'plan_name': plan_name,
@@ -2026,107 +2303,133 @@ def subscription_success():
 @login_required
 def my_promotions():
     user_id = session.get('user_id')
-    active = []
-    history = []
-    payments = []
+    active_boosts = []
+    boost_history = []
+    subscription_payments = []
+    boost_payments = []
     insights = []
     active_subscription = None
     try:
         ensure_boost_tables()
     except Exception:
         pass
+
     try:
         from subscription_helpers import get_subscription_info
         active_subscription = get_subscription_info(user_id)
+    except Exception:
+        active_subscription = None
 
+    try:
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
+
+        # Active and historic boost records
         cur.execute("""
             SELECT b.id, b.ad_id, b.package_id, b.start_date, b.expiry_date, b.status,
-                   l.title as listing_title, l.photos, p.name as package_name,
-                   pay.amount, pay.method as payment_method, pay.transaction_id
+                   COALESCE(l.title, 'Product Removed') AS listing_title, l.photos, p.name AS package_name,
+                   pay.amount AS payment_amount, pay.method AS payment_method, pay.transaction_id AS payment_transaction_id,
+                   tx.total_amount AS transaction_total_amount, tx.gst_amount AS transaction_gst_amount, tx.status AS transaction_status
             FROM ad_boosts b
-            LEFT JOIN listings l ON b.ad_id=l.id
-            LEFT JOIN boost_packages p ON p.id=b.package_id
-            LEFT JOIN payments pay ON pay.id=b.payment_id
-            WHERE b.user_id=%s AND b.status='active' AND b.expiry_date>NOW()
+            LEFT JOIN listings l ON b.ad_id = l.id
+            LEFT JOIN boost_packages p ON b.package_id = p.id
+            LEFT JOIN payments pay ON b.payment_id = pay.id
+            LEFT JOIN transactions tx ON tx.type = 'boost' AND tx.reference_id = b.id
+            WHERE b.user_id = %s
             ORDER BY b.start_date DESC
         """, (user_id,))
-        active = cur.fetchall()
-        cur.execute("""
-            SELECT b.id, b.ad_id, b.package_id, b.start_date, b.expiry_date, b.status,
-                   l.title as listing_title, p.name as package_name, pay.amount, pay.method as payment_method, pay.transaction_id
-            FROM ad_boosts b
-            LEFT JOIN listings l ON b.ad_id=l.id
-            LEFT JOIN boost_packages p ON p.id=b.package_id
-            LEFT JOIN payments pay ON pay.id=b.payment_id
-            WHERE b.user_id=%s
-            ORDER BY b.start_date DESC
-        """, (user_id,))
-        rows = cur.fetchall()
+        boost_rows = cur.fetchall()
         now = datetime.now()
-        for r in rows:
-            st = r["status"]
-            if not r["listing_title"]:
-                st = "listing_deleted"
-            elif r["expiry_date"] and r["expiry_date"] < now:
-                st = "expired"
-            if r not in active:
-                rec = dict(r)
-                rec["resolved_status"] = st
-                history.append(rec)
+        for row in boost_rows:
+            status = row.get('status') or 'inactive'
+            if row.get('expiry_date') and row['expiry_date'] <= now:
+                status = 'expired'
+            if row.get('status') != 'active' and status != 'expired':
+                status = row.get('status') or 'inactive'
 
-        cur.execute("""
-            SELECT pay.id, pay.amount, pay.method as payment_method, pay.transaction_id,
-                   pay.status as payment_status, pay.created_at,
-                   l.title as listing_title, bp.name as package_name,
-                   st.plan_name as subscription_plan_name
-            FROM payments pay
-            LEFT JOIN listings l ON pay.ad_id=l.id
-            LEFT JOIN boost_packages bp ON pay.package_id=bp.id
-            LEFT JOIN subscription_transactions st ON st.transaction_id = pay.transaction_id AND st.user_id = pay.user_id
-            WHERE pay.user_id=%s
-            ORDER BY pay.created_at DESC
-        """, (user_id,))
-        payments = cur.fetchall()
-        for p in payments:
-            if not p.get("package_name") and p.get("subscription_plan_name"):
-                p["package_name"] = f"Subscription Plan - {p['subscription_plan_name']}"
-                p["payment_type"] = "subscription"
+            if row.get('status') == 'active' and row.get('expiry_date') and row['expiry_date'] > now:
+                active_boosts.append(row)
             else:
-                p["payment_type"] = "boost"
-            if not p.get("listing_title") and p["payment_type"] == "subscription":
-                p["listing_title"] = "Subscription Plan"
-            p["invoice_available"] = True
+                rec = dict(row)
+                rec['resolved_status'] = status
+                boost_history.append(rec)
 
-        cur.execute("""
-            SELECT id, plan_name, amount, payment_method, payment_status, transaction_id, created_at
-            FROM subscription_transactions
-            WHERE user_id=%s
-              AND transaction_id IS NOT NULL
-              AND transaction_id NOT IN (
-                  SELECT COALESCE(transaction_id, '') FROM payments WHERE user_id=%s
-              )
-            ORDER BY created_at DESC
-        """, (user_id, user_id))
-        legacy_subs = cur.fetchall()
-        for s in legacy_subs:
-            payments.append({
-                "id": f"sub_{s['id']}",
-                "amount": s["amount"],
-                "payment_method": s["payment_method"],
-                "transaction_id": s["transaction_id"],
-                "payment_status": s["payment_status"] or 'success',
-                "created_at": s["created_at"],
-                "listing_title": "Subscription Plan",
-                "package_name": f"Subscription Plan - {s['plan_name']}",
-                "payment_type": "subscription",
-                "invoice_available": False,
-            })
-        payments.sort(key=lambda x: x.get('created_at'), reverse=True)
+        # Payment history from canonical transactions table
+        use_legacy = False
+        try:
+            cur.execute("SELECT COUNT(*) AS tx_count FROM transactions WHERE user_id = %s", (user_id,))
+            tx_count = cur.fetchone().get('tx_count', 0)
+            if tx_count > 0:
+                cur.execute("""
+                    SELECT t.id AS tx_id, t.type, t.base_amount, t.gst_amount, t.total_amount,
+                           t.payment_method, t.status AS tx_status, t.created_at,
+                           b.id AS boost_id, b.ad_id, COALESCE(l.title, 'Product Removed') AS listing_title,
+                           bp.name AS boost_package_name, pay_boost.id AS boost_payment_id, pay_boost.transaction_id AS boost_transaction_id,
+                           st.id AS subscription_transaction_id, st.plan_name AS subscription_plan_name,
+                           pay_sub.transaction_id AS subscription_payment_transaction_id, pay_sub.id AS subscription_payment_id
+                    FROM transactions t
+                    LEFT JOIN ad_boosts b ON t.type = 'boost' AND t.reference_id = b.id
+                    LEFT JOIN listings l ON b.ad_id = l.id
+                    LEFT JOIN boost_packages bp ON b.package_id = bp.id
+                    LEFT JOIN payments pay_boost ON b.payment_id = pay_boost.id
+                    LEFT JOIN subscription_transactions st ON t.type = 'subscription' AND t.reference_id = st.id AND t.user_id = st.user_id
+                    LEFT JOIN payments pay_sub ON st.transaction_id = pay_sub.transaction_id AND pay_sub.user_id = t.user_id
+                    WHERE t.user_id = %s
+                    ORDER BY t.created_at DESC
+                """, (user_id,))
+                tx_rows = cur.fetchall()
+                for row in tx_rows:
+                    payment_type = row.get('type')
+                    if payment_type == 'subscription':
+                        transaction_id = row.get('subscription_payment_transaction_id') or row.get('subscription_transaction_id')
+                        package_name = f"Subscription Plan - {row.get('subscription_plan_name') or 'Unknown'}"
+                        listing_title = 'Subscription Plan'
+                        invoice_id = row.get('subscription_payment_id')
+                        subscription_payments.append({
+                            'id': invoice_id or f"tx_{row.get('tx_id')}",
+                            'transaction_record_id': row.get('tx_id'),
+                            'payment_type': 'subscription',
+                            'amount': row.get('total_amount') if row.get('total_amount') is not None else row.get('base_amount'),
+                            'base_amount': row.get('base_amount'),
+                            'gst_amount': row.get('gst_amount'),
+                            'payment_method': row.get('payment_method'),
+                            'payment_status': row.get('tx_status'),
+                            'created_at': row.get('created_at'),
+                            'package_name': package_name,
+                            'listing_title': listing_title,
+                            'transaction_id': transaction_id,
+                            'invoice_available': bool(invoice_id)
+                        })
+                    else:
+                        transaction_id = row.get('boost_transaction_id')
+                        package_name = row.get('boost_package_name') or 'Ad Boost'
+                        listing_title = row.get('listing_title') or 'Product Removed'
+                        invoice_id = row.get('boost_payment_id')
+                        boost_payments.append({
+                            'id': invoice_id or f"tx_{row.get('tx_id')}",
+                            'transaction_record_id': row.get('tx_id'),
+                            'payment_type': 'boost',
+                            'amount': row.get('total_amount') if row.get('total_amount') is not None else row.get('base_amount'),
+                            'base_amount': row.get('base_amount'),
+                            'gst_amount': row.get('gst_amount'),
+                            'payment_method': row.get('payment_method'),
+                            'payment_status': row.get('tx_status'),
+                            'created_at': row.get('created_at'),
+                            'package_name': package_name,
+                            'listing_title': listing_title,
+                            'transaction_id': transaction_id,
+                            'invoice_available': bool(invoice_id)
+                        })
+            else:
+                use_legacy = True
+        except MySQLError:
+            use_legacy = True
 
-        if active:
-            ad_ids = [a["ad_id"] for a in active if a.get("ad_id")]
+        if use_legacy:
+            raise MySQLError('fallback to legacy')
+
+        if active_boosts:
+            ad_ids = [a['ad_id'] for a in active_boosts if a.get('ad_id')]
             if ad_ids:
                 fmt = ",".join(["%s"] * len(ad_ids))
                 fav_counts = {}
@@ -2134,51 +2437,145 @@ def my_promotions():
                 views_map = {}
                 cur.execute(f"SELECT id, view_count FROM listings WHERE id IN ({fmt})", tuple(ad_ids))
                 for r in cur.fetchall():
-                    views_map[r["id"]] = int(r.get("view_count") or 0)
+                    views_map[r['id']] = int(r.get('view_count') or 0)
                 try:
                     cur.execute(f"""
-                        SELECT listing_id, COUNT(*) as c
+                        SELECT listing_id, COUNT(*) AS c
                         FROM favorites
                         WHERE listing_id IN ({fmt})
                         GROUP BY listing_id
                     """, tuple(ad_ids))
                     for r in cur.fetchall():
-                        fav_counts[r["listing_id"]] = int(r["c"])
+                        fav_counts[r['listing_id']] = int(r['c'])
                 except Exception:
                     pass
                 try:
                     cur.execute(f"""
-                        SELECT c.listing_id, COUNT(m.id) as c
+                        SELECT c.listing_id, COUNT(m.id) AS c
                         FROM conversations c
-                        LEFT JOIN messages m ON c.id=m.conversation_id
+                        LEFT JOIN messages m ON c.id = m.conversation_id
                         WHERE c.listing_id IN ({fmt})
                         GROUP BY c.listing_id
                     """, tuple(ad_ids))
                     for r in cur.fetchall():
-                        msg_counts[r["listing_id"]] = int(r["c"])
+                        msg_counts[r['listing_id']] = int(r['c'])
                 except Exception:
                     pass
-                for a in active:
-                    adid = a.get("ad_id")
+                for boost in active_boosts:
+                    adid = boost.get('ad_id')
                     dur = 0
                     try:
-                        if a.get("start_date") and a.get("expiry_date"):
-                            dur = (a["expiry_date"] - a["start_date"]).days
+                        if boost.get('start_date') and boost.get('expiry_date'):
+                            dur = (boost['expiry_date'] - boost['start_date']).days
                     except Exception:
                         dur = 0
                     insights.append({
-                        "ad_id": adid,
-                        "title": a.get("listing_title") or "Deleted Listing",
-                        "views": views_map.get(adid, 0),
-                        "clicks": fav_counts.get(adid, 0),
-                        "messages": msg_counts.get(adid, 0),
-                        "duration_days": dur
+                        'ad_id': adid,
+                        'title': boost.get('listing_title') or 'Product Removed',
+                        'views': views_map.get(adid, 0),
+                        'clicks': fav_counts.get(adid, 0),
+                        'messages': msg_counts.get(adid, 0),
+                        'duration_days': dur
                     })
         cur.close()
         conn.close()
-    except Exception:
-        active, history, payments, insights, active_subscription = [], [], [], [], None
-    return render_template("my_promotions.html", active=active, history=history, payments=payments, insights=insights, active_subscription=active_subscription)
+    except MySQLError:
+        # If transactions table is missing, fallback to legacy payments data
+        try:
+            cur.execute("""
+                SELECT pay.id, pay.amount, pay.method AS payment_method, pay.transaction_id,
+                       pay.status AS payment_status, pay.created_at,
+                       l.title AS listing_title, bp.name AS package_name,
+                       st.plan_name AS subscription_plan_name
+                FROM payments pay
+                LEFT JOIN listings l ON pay.ad_id = l.id
+                LEFT JOIN boost_packages bp ON pay.package_id = bp.id
+                LEFT JOIN subscription_transactions st ON st.transaction_id = pay.transaction_id AND st.user_id = pay.user_id
+                WHERE pay.user_id = %s
+                ORDER BY pay.created_at DESC
+            """, (user_id,))
+            legacy_payments = cur.fetchall()
+            for p in legacy_payments:
+                payment_type = 'subscription' if p.get('subscription_plan_name') else 'boost'
+                if payment_type == 'subscription':
+                    subscription_payments.append({
+                        'id': p.get('id'),
+                        'transaction_record_id': None,
+                        'payment_type': 'subscription',
+                        'amount': p.get('amount'),
+                        'base_amount': p.get('amount'),
+                        'gst_amount': None,
+                        'payment_method': p.get('payment_method'),
+                        'payment_status': p.get('payment_status'),
+                        'created_at': p.get('created_at'),
+                        'package_name': f"Subscription Plan - {p.get('subscription_plan_name')}",
+                        'listing_title': 'Subscription Plan',
+                        'transaction_id': p.get('transaction_id'),
+                        'invoice_available': True,
+                    })
+                else:
+                    boost_payments.append({
+                        'id': p.get('id'),
+                        'transaction_record_id': None,
+                        'payment_type': 'boost',
+                        'amount': p.get('amount'),
+                        'base_amount': p.get('amount'),
+                        'gst_amount': None,
+                        'payment_method': p.get('payment_method'),
+                        'payment_status': p.get('payment_status'),
+                        'created_at': p.get('created_at'),
+                        'package_name': p.get('package_name') or 'Ad Boost',
+                        'listing_title': p.get('listing_title') or 'Product Removed',
+                        'transaction_id': p.get('transaction_id'),
+                        'invoice_available': True,
+                    })
+
+            cur.execute("""
+                SELECT id, plan_name, amount, payment_method, payment_status, transaction_id, created_at
+                FROM subscription_transactions
+                WHERE user_id=%s
+                  AND transaction_id IS NOT NULL
+                  AND transaction_id NOT IN (
+                      SELECT COALESCE(transaction_id, '') FROM payments WHERE user_id=%s
+                  )
+                ORDER BY created_at DESC
+            """, (user_id, user_id))
+            legacy_subs = cur.fetchall()
+            for s in legacy_subs:
+                subscription_payments.append({
+                    'id': f"sub_{s['id']}",
+                    'transaction_record_id': None,
+                    'payment_type': 'subscription',
+                    'amount': s.get('amount'),
+                    'base_amount': s.get('amount'),
+                    'gst_amount': None,
+                    'payment_method': s.get('payment_method'),
+                    'payment_status': s.get('payment_status') or 'success',
+                    'created_at': s.get('created_at'),
+                    'package_name': f"Subscription Plan - {s.get('plan_name')}",
+                    'listing_title': 'Subscription Plan',
+                    'transaction_id': s.get('transaction_id'),
+                    'invoice_available': False,
+                })
+        except Exception:
+            pass
+        finally:
+            try:
+                cur.close()
+                conn.close()
+            except Exception:
+                pass
+    except Exception as e:
+        app.logger.error(f"Error loading promotions page: {e}")
+        active_boosts, boost_history, subscription_payments, boost_payments, insights, active_subscription = [], [], [], [], [], None
+
+    return render_template("my_promotions.html",
+                           active_boosts=active_boosts,
+                           boost_history=boost_history,
+                           subscription_payments=subscription_payments,
+                           boost_payments=boost_payments,
+                           insights=insights,
+                           active_subscription=active_subscription)
 
 @app.route("/invoice/<int:payment_id>")
 @login_required
@@ -2535,7 +2932,8 @@ def ensure_boost_tables():
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
                 ad_id INT NOT NULL,
-                package_id INT NOT NULL,
+                package_id INT DEFAULT NULL,
+                subscription_id INT DEFAULT NULL,
                 payment_id INT DEFAULT NULL,
                 start_date DATETIME NOT NULL,
                 expiry_date DATETIME NOT NULL,
@@ -2543,7 +2941,8 @@ def ensure_boost_tables():
                 created_at DATETIME NOT NULL,
                 INDEX idx_ad (ad_id),
                 INDEX idx_user (user_id),
-                INDEX idx_expiry (expiry_date)
+                INDEX idx_expiry (expiry_date),
+                INDEX idx_subscription (subscription_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
         cur.execute("""
@@ -2581,6 +2980,14 @@ def ensure_boost_tables():
                 INDEX idx_status (status)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
+        try:
+            cur.execute("ALTER TABLE ad_boosts MODIFY COLUMN package_id INT DEFAULT NULL")
+        except Exception:
+            pass
+        try:
+            cur.execute("ALTER TABLE ad_boosts ADD COLUMN subscription_id INT DEFAULT NULL")
+        except Exception:
+            pass
         try:
             cur.execute("ALTER TABLE payments ADD COLUMN package_id INT DEFAULT NULL")
         except Exception:
@@ -3119,7 +3526,16 @@ def transactions():
         'pending_complaints': pending_complaints
     }
 
-    return render_template('transactions.html', stats=stats, revenue_by_day=revenue_by_day, revenue_by_category=revenue_by_category, top_paying_sellers=top_paying_sellers)
+    return render_template(
+        'transactions.html',
+        stats=stats,
+        boost_payments=boost_payments,
+        featured_payments=featured_payments,
+        subscription_payments=subscription_payments,
+        revenue_by_day=revenue_by_day,
+        revenue_by_category=revenue_by_category,
+        top_paying_sellers=top_paying_sellers
+    )
 
 if __name__ == "__main__":
     import sys

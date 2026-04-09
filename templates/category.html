@@ -54,8 +54,8 @@
             <div class="col-md-2">
               <select class="form-select form-select-sm" name="sort">
                 <option value="latest" {% if sort=='latest' %}selected{% endif %}>Latest</option>
-                <option value="price_low" {% if sort=='price_low' %}selected{% endif %}>Price: Low to High</option>
-                <option value="price_high" {% if sort=='price_high' %}selected{% endif %}>Price: High to Low</option>
+                <option value="price_asc" {% if sort=='price_asc' %}selected{% endif %}>Price: Low to High</option>
+                <option value="price_desc" {% if sort=='price_desc' %}selected{% endif %}>Price: High to Low</option>
               </select>
             </div>
             <div class="col-md-2">
@@ -103,8 +103,8 @@
         <div class="empty-icon">
           <i class="fas fa-search-minus"></i>
         </div>
-        <h3 class="fw-bold">No listings found in this category</h3>
-        <p class="text-muted">Try adjusting your search or filters to find what you're looking for.</p>
+        <h3 class="fw-bold">No listings in this category yet</h3>
+        <p class="text-muted">Be the first to post in {{ category }} or try clearing the filters.</p>
         <div class="mt-4">
           <a href="{{ url_for('category_page', category_slug=category_slug) }}" class="btn btn-outline-primary me-2">Clear Filters</a>
           <a href="{{ url_for('home') }}" class="btn btn-primary">Go to Homepage</a>

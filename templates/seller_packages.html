@@ -23,7 +23,7 @@
     <div class="container-fluid">
         <div class="header">
             <h1>🚀 Seller Subscription Plans</h1>
-            <p>Choose a plan to boost your listings and reach more buyers</p>
+            <p>Choose a plan to post ads, boost your listings, and reach more buyers</p>
         </div>
 
         {% set plan_prices = plan_prices if plan_prices is defined else {'Starter':149,'Growth':299,'Pro':599,'Business':999} %}
@@ -32,11 +32,15 @@
 
         {% if active_subscription %}
             <div class="alert alert-success text-center" role="alert">
-                <strong>Active Plan:</strong> {{ active_subscription.plan_name }} ({{ active_subscription.ads_used }} / {{ active_subscription.ad_limit if active_subscription.ad_limit != -1 else 'Unlimited' }} boosts used)
+                <strong>Active Plan:</strong> {{ active_subscription.plan_name }} 
+                ({{ active_subscription.ads_used }} / {{ active_subscription.ad_limit if active_subscription.ad_limit != -1 else 'Unlimited' }} ads posted)
                 | Expires: {{ active_subscription.end_date.strftime('%d %b %Y') }}
             </div>
             <div class="alert alert-info text-center" role="alert">
-                🚀 You can upgrade your plan anytime or extend the same plan before it expires.
+                🚀 You have {{ active_subscription.remaining_ads if active_subscription.remaining_ads != -1 else 'unlimited' }} ads remaining.
+                {% if active_subscription.boost_limit != -1 %}
+                    • {{ active_subscription.boosts_used }} / {{ active_subscription.boost_limit }} boosts used
+                {% endif %}
             </div>
         {% endif %}
 
@@ -50,10 +54,10 @@
                         <p><small>per month</small></p>
                         
                         <ul class="features">
-                            <li>✅ 5 boosts/month</li>
+                            <li>✅ 5 ads/month</li>
+                            <li>✅ 5 boosts included</li>
                             <li>✅ Basic visibility</li>
                             <li>✅ Simple analytics</li>
-                            <li>✅ Email support</li>
                         </ul>
                         
                         <form method="POST" action="/subscription-payment" onsubmit="return handleSubscriptionForm(this)">
@@ -81,7 +85,7 @@
                                 {% endif %}
                             {% endif %}
                             <input type="hidden" name="action_type" value="{{ action_type }}">
-                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}" {% if action_type == 'downgrade' %}disabled title="Downgrade available after current plan expires"{% endif %}>{{ button_text }}</button>
                         </form>
                     </div>
                 </div>
@@ -95,10 +99,10 @@
                         <p><small>per month</small></p>
                         
                         <ul class="features">
-                            <li>✅ 15 boosts/month</li>
+                            <li>✅ 15 ads/month</li>
+                            <li>✅ 15 boosts included</li>
                             <li>✅ Higher ranking</li>
                             <li>✅ Performance metrics</li>
-                            <li>✅ Priority support</li>
                         </ul>
                         
                         <form method="POST" action="/subscription-payment" onsubmit="return handleSubscriptionForm(this)">
@@ -126,7 +130,7 @@
                                 {% endif %}
                             {% endif %}
                             <input type="hidden" name="action_type" value="{{ action_type }}">
-                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}" {% if action_type == 'downgrade' %}disabled title="Downgrade available after current plan expires"{% endif %}>{{ button_text }}</button>
                         </form>
                     </div>
                 </div>
@@ -139,10 +143,10 @@
                         <p><small>per month</small></p>
                         
                         <ul class="features">
-                            <li>✅ 40 boosts/month</li>
+                            <li>✅ 50 ads/month</li>
+                            <li>✅ 40 boosts included</li>
                             <li>✅ Priority ranking</li>
                             <li>✅ Featured listings</li>
-                            <li>✅ Trusted badge</li>
                         </ul>
                         
                         <form method="POST" action="/subscription-payment" onsubmit="return handleSubscriptionForm(this)">
@@ -170,7 +174,7 @@
                                 {% endif %}
                             {% endif %}
                             <input type="hidden" name="action_type" value="{{ action_type }}">
-                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}" {% if action_type == 'downgrade' %}disabled title="Downgrade available after current plan expires"{% endif %}>{{ button_text }}</button>
                         </form>
                     </div>
                 </div>
@@ -183,9 +187,9 @@
                         <p><small>per month</small></p>
                         
                         <ul class="features">
+                            <li>✅ Unlimited ads</li>
                             <li>✅ Unlimited boosts</li>
                             <li>✅ Top priority</li>
-                            <li>✅ Home page featured</li>
                             <li>✅ Premium badge</li>
                         </ul>
                         
@@ -214,7 +218,7 @@
                                 {% endif %}
                             {% endif %}
                             <input type="hidden" name="action_type" value="{{ action_type }}">
-                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}">{{ button_text }}</button>
+                            <button type="submit" class="{{ button_class }}" data-action="{{ action_type }}" {% if action_type == 'downgrade' %}disabled title="Downgrade available after current plan expires"{% endif %}>{{ button_text }}</button>
                         </form>
                     </div>
                 </div>
@@ -229,11 +233,23 @@
 
     <script>
         function handleSubscriptionForm(form) {
-            var actionType = form.querySelector('input[name="action_type"]').value;
+            // Get the action type from the hidden input
+            const actionTypeInput = form.querySelector('input[name="action_type"]');
+            if (!actionTypeInput) {
+                console.error('Action type input not found');
+                return false;
+            }
+            
+            const actionType = actionTypeInput.value;
+            
+            // Prevent downgrade (should be disabled anyway)
             if (actionType === 'downgrade') {
+                event.preventDefault();
                 alert('Downgrade available after current plan expires');
                 return false;
             }
+            
+            // Allow other actions to proceed
             return true;
         }
     </script>

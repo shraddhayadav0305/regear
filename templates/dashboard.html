@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -485,9 +485,7 @@
                             <a href="{{ url_for('sell') }}"><i class="fas fa-plus-circle"></i> Post New Ad</a>
                             <a href="{{ url_for('messages_list') }}"><i class="fas fa-comments"></i> Messages</a>
                             <a href="{{ url_for('favorites') }}"><i class="fas fa-heart"></i> Favorites</a>
-                            {% if role == 'seller' %}
                             <a href="{{ url_for('seller_plans') }}"><i class="fas fa-rocket"></i> Seller Plans</a>
-                            {% endif %}
                             <a href="{{ url_for('my_promotions') }}"><i class="fas fa-wallet"></i> Payments / Promotions</a>
                         </div>
                         <div class="profile-divider"></div>
@@ -506,9 +504,7 @@
         <a class="sidebar-link {% if request.path == url_for('dashboard') %}sidebar-active{% endif %}" href="{{ url_for('dashboard') }}"><i class="fas fa-chart-pie"></i> Dashboard</a>
         <a class="sidebar-link {% if request.path.startswith('/my-listings') %}sidebar-active{% endif %}" href="{{ url_for('my_listings') }}"><i class="fas fa-list"></i> My Listings</a>
         <a class="sidebar-link" href="{{ url_for('sell') }}"><i class="fas fa-plus-circle"></i> Post New Ad</a>
-        {% if role == 'seller' %}
         <a class="sidebar-link {% if request.path == url_for('seller_plans') or request.path == '/seller-packages' %}sidebar-active{% endif %}" href="{{ url_for('seller_plans') }}"><i class="fas fa-rocket"></i> Seller Plans</a>
-        {% endif %}
         <a class="sidebar-link {% if request.path.startswith('/favorites') or request.path == '/saved' %}sidebar-active{% endif %}" href="{{ url_for('favorites') }}"><i class="fas fa-heart"></i> Favorites</a>
         <a class="sidebar-link {% if request.path.startswith('/messages') %}sidebar-active{% endif %}" href="{{ url_for('messages_list') }}"><i class="fas fa-comments"></i> Messages</a>
         <a class="sidebar-link {% if request.path.startswith('/profile') %}sidebar-active{% endif %}" href="{{ url_for('profile') }}"><i class="fas fa-user"></i> My Profile</a>
@@ -574,6 +570,13 @@
                         </div>
                         <h3>My Orders</h3>
                         <p>Check your purchases and reviews</p>
+                    </a>
+                    <a href="/seller-packages" class="action-card">
+                        <div class="action-icon">
+                            <i class="fas fa-rocket"></i>
+                        </div>
+                        <h3>Seller Plans</h3>
+                        <p>Get subscriptions and boost more listings</p>
                     </a>
                 {% else %}
                     <a href="/post-item" class="action-card">

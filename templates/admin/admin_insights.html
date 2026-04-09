@@ -3,11 +3,16 @@
 {% block title %}Insights - ReGear Admin{% endblock %}
 
 {% block content %}
-<div class="admin-header mb-4">
+<div class="admin-header mb-4 d-flex justify-content-between align-items-center">
     <div>
         <h1 class="mb-2">Analytics & Insights</h1>
         <p class="text-muted">Real-time marketplace analytics powered by live data</p>
     </div>
+    {% if insights.low_data %}
+    <div>
+        <span class="badge bg-warning text-dark py-2 px-3">Low Data</span>
+    </div>
+    {% endif %}
 </div>
 
 <!-- PLATFORM OVERVIEW -->
@@ -49,6 +54,13 @@
     </div>
     <div class="col-6 col-lg-2">
         <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            <small class="text-muted">Subscription Revenue</small>
+            <h4 class="mb-0">₹{{ insights.subscription_revenue|default(0) }}</h4>
+            <small class="text-muted">Success payments only</small>
+        </div>
+    </div>
+    <div class="col-6 col-lg-2">
+        <div class="card p-3 text-center" style="border:none; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
             <small class="text-muted">New Users (7d)</small>
             <h4 class="mb-0">{{ insights.kpis.new_users_week|default(0) }}</h4>
             <small class="{% if insights.kpis.new_users_week_delta|default(0) >= 0 %}text-success{% else %}text-danger{% endif %}">
@@ -67,7 +79,7 @@
                     <div>
                         <h6 class="card-title mb-2" style="opacity: 0.9;">Revenue Growth</h6>
                         <h2 class="mb-2">
-                            <span id="revenueGrowth">0</span>%
+                            <span id="revenueGrowth">{{ insights.revenue_growth_pct|default(0) }}</span>%
                         </h2>
                         <small style="opacity: 0.8;">vs last month</small>
                     </div>
@@ -85,7 +97,7 @@
                         <h2 class="mb-2">
                             {{ insights.active_sellers|default(0) }}
                         </h2>
-                        <small style="opacity: 0.8;">with active subscriptions</small>
+                        <small style="opacity: 0.8;">active listing, boost, or subscription</small>
                     </div>
                     <i class="fas fa-store fa-2x" style="opacity: 0.3;"></i>
                 </div>
@@ -166,10 +178,10 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between mb-1">
                         <small><strong>Avg. Listing Completion</strong></small>
-                        <small>85%</small>
+                        <small>{{ insights.listing_completion_rate|default(0) }}%</small>
                     </div>
                     <div class="progress" style="height: 6px; border-radius: 10px;">
-                        <div class="progress-bar bg-success" style="width: 85%;"></div>
+                        <div class="progress-bar bg-success" style="width: {{ insights.listing_completion_rate|default(0) }}%;"></div>
                     </div>
                 </div>
                 <div class="mb-3">

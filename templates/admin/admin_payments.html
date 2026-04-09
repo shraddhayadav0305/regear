@@ -65,32 +65,36 @@
     <div class="row g-3 align-items-end">
         <div class="col-md-3">
             <label class="form-label"><i class="fas fa-calendar"></i> Filter by Month</label>
-            <select class="form-select" id="monthFilter" onchange="window.location.href = `{{ url_for('admin.revenue') }}?month=${this.value}`">
+            <select class="form-select" id="monthFilter" name="month">
                 <option value="">All Months</option>
-                {% for month in available_months|reverse %}
-                    <option value="{{ month }}" {% if month == selected_month %}selected{% endif %}>{{ month }}</option>
-                {% endfor %}
             </select>
         </div>
         <div class="col-md-3">
             <label class="form-label"><i class="fas fa-credit-card"></i> Payment Method</label>
-            <select class="form-select" id="methodFilter" onchange="window.location.href = `{{ url_for('admin.revenue') }}?method=${this.value}`">
+            <select class="form-select" id="methodFilter" name="payment_method">
                 <option value="">All Methods</option>
-                <option value="credit_card" {% if payment_method == 'credit_card' %}selected{% endif %}>Credit Card</option>
-                <option value="debit_card" {% if payment_method == 'debit_card' %}selected{% endif %}>Debit Card</option>
-                <option value="upi" {% if payment_method == 'upi' %}selected{% endif %}>UPI</option>
-                <option value="netbanking" {% if payment_method == 'netbanking' %}selected{% endif %}>Net Banking</option>
-                <option value="wallet" {% if payment_method == 'wallet' %}selected{% endif %}>Wallet</option>
             </select>
         </div>
-        <div class="col-md-6 text-end">
-            <small class="text-muted"><i class="fas fa-info-circle"></i> Showing {{ payments|length }} payments</small>
+        <div class="col-md-3">
+            <label class="form-label"><i class="fas fa-layer-group"></i> Transaction Type</label>
+            <select class="form-select" id="typeFilter" name="type">
+                <option value="">All Types</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label"><i class="fas fa-info-circle"></i> Status</label>
+            <select class="form-select" id="statusFilter" name="status">
+                <option value="">All Statuses</option>
+            </select>
+        </div>
+        <div class="col-md-12 text-end">
+            <small class="text-muted"><i class="fas fa-info-circle"></i> Showing <span id="transactionCount">0</span> transactions</small>
         </div>
     </div>
 </div>
 
 <!-- PAYMENTS TABLE -->
-<div class="table-responsive card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+<div class="table-responsive card" id="transactionsTableCard" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
     <table class="table table-hover mb-0">
         <thead class="table-light">
             <tr>
@@ -106,84 +110,23 @@
                 <th><i class="fas fa-list"></i> Listing Status</th>
                 <th><i class="fas fa-calendar"></i> Date</th>
                 <th><i class="fas fa-check"></i> Status</th>
+                <th><i class="fas fa-cogs"></i> Actions</th>
             </tr>
         </thead>
-        <tbody>
-            {% if payments %}
-                {% for payment in payments %}
-                <tr>
-                    <td><code style="font-size: 11px;">{{ payment.id }}</code></td>
-                    <td>
-                        <strong>{{ payment.username }}</strong><br>
-                        <small class="text-muted">{{ payment.email }}</small>
-                    </td>
-                    <td>
-                        <span class="badge bg-secondary">{{ payment.transaction_type|default('Unknown') }}</span>
-                    </td>
-                    <td>
-                        <span class="badge bg-info">{{ payment.plan|upper if payment.plan else 'N/A' }}</span>
-                    </td>
-                    <td>₹{{ "{:,.2f}".format(payment.amount) }}</td>
-                    <td>
-                        <span class="badge bg-light text-dark">₹{{ "{:,.2f}".format(payment.gst) }}</span>
-                    </td>
-                    <td><strong>₹{{ "{:,.2f}".format(payment.total_amount) }}</strong></td>
-                    <td>
-                        {% set method_icons = {
-                            'credit_card': 'fas fa-credit-card',
-                            'debit_card': 'fas fa-credit-card',
-                            'upi': 'fas fa-mobile-alt',
-                            'netbanking': 'fas fa-university',
-                            'wallet': 'fas fa-wallet'
-                        } %}
-                        <i class="{{ method_icons.get(payment.payment_method, 'fas fa-money-bill') }}"></i> 
-                        {{ payment.payment_method|replace('_', ' ')|title }}
-                    </td>
-                    <td>
-                        {% set promo = payment.promotion_status or '' %}
-                        {% if promo == 'active' %}
-                        <span class="badge bg-success">Active</span>
-                        {% elif promo == 'expired' %}
-                        <span class="badge bg-secondary">Expired</span>
-                        {% elif promo == 'cancelled' %}
-                        <span class="badge bg-warning text-dark">Cancelled</span>
-                        {% else %}
-                        <span class="badge bg-light text-dark">—</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if payment.listing_status %}
-                        <span class="badge bg-light text-dark">{{ payment.listing_status|capitalize }}</span>
-                        {% else %}
-                        <span class="badge bg-danger">Deleted</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ payment.paid_at.strftime('%d %b %Y, %I:%M %p') if payment.paid_at else 'N/A' }}</td>
-                    <td>
-                        {% if payment.status in ['success', 'paid'] %}
-                            <span class="badge bg-success"><i class="fas fa-check-circle"></i> Completed</span>
-                        {% elif payment.status in ['pending'] %}
-                            <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Pending</span>
-                        {% else %}
-                            <span class="badge bg-danger"><i class="fas fa-times-circle"></i> {{ payment.status|capitalize }}</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="12" class="text-center py-5">
-                        <p class="text-muted mb-0"><i class="fas fa-inbox"></i> No payments found</p>
-                    </td>
-                </tr>
-            {% endif %}
+        <tbody id="transactionsBody">
+            <tr>
+                <td colspan="13" class="text-center py-5" id="transactionsLoadingRow">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                    <p class="text-muted mt-3 mb-0">Loading transactions...</p>
+                </td>
+            </tr>
         </tbody>
     </table>
 </div>
 
 <!-- MONTHLY REVENUE CHART -->
 <div class="row mt-4">
-    <div class="col-lg-8">
+    <div class="col-lg-4 mb-4">
         <div class="card" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
             <div class="card-body">
                 <h6 class="card-title mb-3">Monthly Revenue Trend</h6>
@@ -191,11 +134,19 @@
             </div>
         </div>
     </div>
-    <div class="col-lg-4">
+    <div class="col-lg-4 mb-4">
         <div class="card" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
             <div class="card-body">
                 <h6 class="card-title mb-3">Payment Methods</h6>
                 <canvas id="methodChart" height="110"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 mb-4">
+        <div class="card" style="border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+            <div class="card-body">
+                <h6 class="card-title mb-3">Revenue by Type</h6>
+                <canvas id="typeChart" height="110"></canvas>
             </div>
         </div>
     </div>
@@ -237,91 +188,279 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
-    // Monthly Revenue Chart
-    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-    const revenueChart = new Chart(revenueCtx, {
-        type: 'line',
-        data: {
-            labels: {{ monthly_revenue_labels|tojson }},
-            datasets: [{
-                label: 'Revenue (₹)',
-                data: {{ monthly_revenue_data|tojson }},
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                pointBackgroundColor: '#10b981',
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                fill: true
-            }]
+    const transactionState = {
+        filters: {
+            month: '',
+            payment_method: '',
+            type: '',
+            status: ''
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: { 
-                        color: '#6b7280',
-                        usePointStyle: true,
-                        padding: 20
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#6b7280',
-                        callback: function(value) {
-                            return '₹' + (value/1000).toFixed(0) + 'K';
-                        }
-                    },
-                    grid: { color: '#e5e7eb' }
-                },
-                x: {
-                    ticks: { color: '#6b7280' },
-                    grid: { display: false }
-                }
-            }
+        charts: {
+            revenueChart: null,
+            methodChart: null,
+            typeChart: null
         }
-    });
+    };
 
-    // Payment Methods Chart
-    const methodCtx = document.getElementById('methodChart').getContext('2d');
-    const methodChart = new Chart(methodCtx, {
-        type: 'doughnut',
-        data: {
-            labels: {{ payment_method_labels|tojson }},
-            datasets: [{
-                data: {{ payment_method_counts|tojson }},
-                backgroundColor: [
-                    'rgba(59, 130, 246, 0.8)',
-                    'rgba(239, 68, 68, 0.8)',
-                    'rgba(16, 185, 129, 0.8)',
-                    'rgba(245, 158, 11, 0.8)',
-                    'rgba(139, 92, 246, 0.8)'
-                ],
-                borderColor: '#fff',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom',
-                    labels: { 
-                        color: '#6b7280',
-                        padding: 12,
-                        font: { size: 12 }
-                    }
-                }
-            }
+    function formatCurrency(value) {
+        return `₹${Number(value || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+
+    function createBadge(label, variant = 'secondary') {
+        return `<span class="badge bg-${variant} text-uppercase">${label}</span>`;
+    }
+
+    function setLoading(isLoading) {
+        const body = document.getElementById('transactionsBody');
+        const count = document.getElementById('transactionCount');
+        if (isLoading) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="13" class="text-center py-5" id="transactionsLoadingRow">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                        <p class="text-muted mt-3 mb-0">Loading transactions...</p>
+                    </td>
+                </tr>
+            `;
+            count.textContent = '...';
         }
+    }
+
+    function showError(message) {
+        document.getElementById('transactionsBody').innerHTML = `
+            <tr>
+                <td colspan="13" class="text-center py-5">
+                    <p class="text-danger mb-0">${message}</p>
+                </td>
+            </tr>
+        `;
+        document.querySelector('#transactionCount').textContent = 0;
+    }
+
+    async function loadTransactions() {
+        setLoading(true);
+        const query = new URLSearchParams(transactionState.filters).toString();
+
+        try {
+            const response = await fetch(`/admin/transactions?${query}`);
+            const data = await response.json();
+            console.log('Transactions API:', data);
+
+            if (!response.ok || !data.success) {
+                showError(data.message || 'Error fetching transactions');
+                return;
+            }
+
+            const stats = data.stats || {
+                totalRevenue: 0,
+                monthlyRevenue: 0,
+                totalTransactions: 0,
+                avgTransaction: 0
+            };
+
+            const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+            const charts = data.charts || {
+                monthlyRevenue: [],
+                paymentMethods: [],
+                revenueByType: []
+            };
+
+            renderSummary(stats);
+            renderFilters(data.filters || {});
+            renderTransactions(transactions);
+            updateCharts(charts);
+        } catch (error) {
+            console.error('Failed to load transactions:', error);
+            showError('Error fetching transactions');
+        }
+    }
+
+    function renderSummary(stats) {
+        const totalRevenue = stats.totalRevenue != null ? stats.totalRevenue : stats.total_revenue;
+        const monthlyRevenue = stats.monthlyRevenue != null ? stats.monthlyRevenue : stats.monthly_revenue;
+        const totalTransactions = stats.totalTransactions != null ? stats.totalTransactions : stats.total_transactions;
+        const avgTransaction = stats.avgTransaction != null ? stats.avgTransaction : stats.avg_transaction;
+
+        document.querySelector('#transactionCount').textContent = totalTransactions || 0;
+        document.querySelectorAll('.card h2').forEach((card, index) => {
+            if (index === 0) card.textContent = formatCurrency(totalRevenue);
+            if (index === 1) card.textContent = formatCurrency(monthlyRevenue);
+            if (index === 2) card.textContent = totalTransactions || 0;
+            if (index === 3) card.textContent = formatCurrency(avgTransaction);
+        });
+    }
+
+    function renderFilters(filters) {
+        const monthSelect = document.getElementById('monthFilter');
+        const methodSelect = document.getElementById('methodFilter');
+        const typeSelect = document.getElementById('typeFilter');
+        const statusSelect = document.getElementById('statusFilter');
+
+        const safeFilters = {
+            months: Array.isArray(filters.months) ? filters.months : [],
+            payment_methods: Array.isArray(filters.payment_methods) ? filters.payment_methods : [],
+            types: Array.isArray(filters.types) ? filters.types : [],
+            statuses: Array.isArray(filters.statuses) ? filters.statuses : []
+        };
+
+        populateSelect(monthSelect, safeFilters.months, transactionState.filters.month);
+        populateSelect(methodSelect, safeFilters.payment_methods, transactionState.filters.payment_method, true);
+        populateSelect(typeSelect, safeFilters.types, transactionState.filters.type);
+        populateSelect(statusSelect, safeFilters.statuses, transactionState.filters.status);
+    }
+
+    function populateSelect(select, options, currentValue, humanize = false) {
+        const selected = currentValue || '';
+        const existing = select.value;
+        select.innerHTML = '<option value="">All</option>';
+        options.forEach(option => {
+            const value = option;
+            const label = humanize ? option.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : option;
+            const isSelected = value === selected;
+            select.insertAdjacentHTML('beforeend', `<option value="${value}" ${isSelected ? 'selected' : ''}>${label}</option>`);
+        });
+        select.value = selected;
+    }
+
+    function renderTransactions(transactions) {
+        const body = document.getElementById('transactionsBody');
+        if (!transactions || !transactions.length) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="13" class="text-center py-5">
+                        <p class="text-muted mb-0"><i class="fas fa-inbox"></i> No transactions found for the selected filters.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        body.innerHTML = transactions.map(tx => {
+            const paymentIcon = {
+                UPI: 'fas fa-mobile-alt',
+                Card: 'fas fa-credit-card',
+                Wallet: 'fas fa-wallet'
+            }[tx.payment_method] || 'fas fa-money-bill';
+
+            const typeBadge = createBadge(tx.type || 'Unknown', tx.type === 'subscription' ? 'info' : 'primary');
+            const statusBadge = tx.status === 'completed' ? createBadge('Completed', 'success') : tx.status === 'refunded' ? createBadge('Refunded', 'danger') : createBadge(tx.status || 'Pending', 'warning');
+            const promotionBadge = tx.type === 'subscription' ? createBadge('N/A', 'secondary') : tx.promotion_status === 'active' ? createBadge('Active', 'success') : tx.promotion_status === 'expired' ? createBadge('Expired', 'secondary') : createBadge(tx.promotion_status || 'Unknown', 'light');
+            const listingBadge = tx.listing_status && tx.listing_status !== 'N/A' ? createBadge(tx.listing_status || 'N/A', 'light') : createBadge('N/A', 'secondary');
+            const canRefund = tx.status === 'completed';
+            const actionButton = canRefund ? `<button class="btn btn-sm btn-danger" onclick="refundTransaction(${tx.id})">Refund</button>` : `<button class="btn btn-sm btn-secondary" disabled>Refund</button>`;
+
+            return `
+                <tr>
+                    <td><code style="font-size: 11px;">${tx.id}</code></td>
+                    <td>
+                        <strong>${tx.user_name}</strong><br>
+                        <small class="text-muted">${tx.user_email}</small>
+                    </td>
+                    <td>${typeBadge}</td>
+                    <td><span class="badge bg-info">${tx.plan_name}</span></td>
+                    <td>${formatCurrency(tx.base_amount)}</td>
+                    <td><span class="badge bg-light text-dark">${formatCurrency(tx.gst_amount)}</span></td>
+                    <td><strong>${formatCurrency(tx.total_amount)}</strong></td>
+                    <td><i class="${paymentIcon}"></i> ${tx.payment_method}</td>
+                    <td>${promotionBadge}</td>
+                    <td>${listingBadge}</td>
+                    <td>${(tx.created_at || tx.date) ? new Date(tx.created_at || tx.date).toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}) : 'N/A'}</td>
+                    <td>${statusBadge}</td>
+                    <td>${actionButton}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function refundTransaction(transactionId) {
+        if (!confirm('Refund this transaction? This will mark the transaction as refunded.')) {
+            return;
+        }
+        const response = await fetch(`/admin/transactions/refund/${transactionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert('Transaction refunded successfully.');
+            loadTransactions();
+        } else {
+            alert(result.message || 'Refund failed.');
+        }
+    }
+
+    function initCharts() {
+        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        transactionState.charts.revenueChart = new Chart(revenueCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Revenue (₹)', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 2, tension: 0.4, pointRadius: 4, fill: true }] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: true, labels: { color: '#6b7280', usePointStyle: true, padding: 20 } } },
+                scales: { y: { beginAtZero: true, ticks: { color: '#6b7280', callback: value => '₹' + (value/1000).toFixed(0) + 'K' }, grid: { color: '#e5e7eb' } }, x: { ticks: { color: '#6b7280' }, grid: { display: false } } }
+            }
+        });
+
+        const methodCtx = document.getElementById('methodChart').getContext('2d');
+        transactionState.charts.methodChart = new Chart(methodCtx, {
+            type: 'doughnut',
+            data: { labels: [], datasets: [{ data: [], backgroundColor: ['rgba(59, 130, 246, 0.8)','rgba(239, 68, 68, 0.8)','rgba(16, 185, 129, 0.8)','rgba(245, 158, 11, 0.8)','rgba(139, 92, 246, 0.8)'], borderColor: '#fff', borderWidth: 2 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: true, position: 'bottom', labels: { color: '#6b7280', padding: 12, font: { size: 12 } } } } }
+        });
+
+        const typeCtx = document.getElementById('typeChart').getContext('2d');
+        transactionState.charts.typeChart = new Chart(typeCtx, {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Revenue by Type', data: [], backgroundColor: ['rgba(59, 130, 246, 0.8)','rgba(16, 185, 129, 0.8)'], borderColor: '#fff', borderWidth: 1 }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { color: '#6b7280' }, grid: { color: '#e5e7eb' } }, x: { ticks: { color: '#6b7280' }, grid: { display: false } } } }
+        });
+    }
+
+    function updateCharts(charts) {
+        const { revenueChart, methodChart, typeChart } = transactionState.charts;
+        if (revenueChart) {
+            revenueChart.data.labels = Array.isArray(charts.monthlyRevenue) ? charts.monthlyRevenue.map(item => item.label) : [];
+            revenueChart.data.datasets[0].data = Array.isArray(charts.monthlyRevenue) ? charts.monthlyRevenue.map(item => item.value) : [];
+            revenueChart.update();
+        }
+        if (methodChart) {
+            methodChart.data.labels = Array.isArray(charts.paymentMethods) ? charts.paymentMethods.map(item => item.method) : [];
+            methodChart.data.datasets[0].data = Array.isArray(charts.paymentMethods) ? charts.paymentMethods.map(item => item.count) : [];
+            methodChart.update();
+        }
+        if (typeChart) {
+            typeChart.data.labels = Array.isArray(charts.revenueByType) ? charts.revenueByType.map(item => item.type) : [];
+            typeChart.data.datasets[0].data = Array.isArray(charts.revenueByType) ? charts.revenueByType.map(item => item.total) : [];
+            typeChart.update();
+        }
+    }
+
+    function onFilterChanged(event) {
+        transactionState.filters[event.target.name] = event.target.value;
+        const queryString = new URLSearchParams(transactionState.filters).toString();
+        window.history.replaceState(null, '', queryString ? `?${queryString}` : window.location.pathname);
+        loadTransactions();
+    }
+
+    function initFiltersFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        ['month', 'payment_method', 'type', 'status'].forEach(key => {
+            const value = params.get(key);
+            if (value) {
+                transactionState.filters[key] = value;
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initCharts();
+        initFiltersFromUrl();
+        document.getElementById('monthFilter').addEventListener('change', onFilterChanged);
+        document.getElementById('methodFilter').addEventListener('change', onFilterChanged);
+        document.getElementById('typeFilter').addEventListener('change', onFilterChanged);
+        document.getElementById('statusFilter').addEventListener('change', onFilterChanged);
+        loadTransactions();
     });
 </script>
 {% endblock %}

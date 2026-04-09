@@ -552,6 +552,17 @@
     </div>
     {% endif %}
 
+    {% if boost_error_message %}
+      <div class="alert alert-warning text-center" role="alert" style="font-size:1.05rem;">
+        <strong>⚠️ Cannot boost this listing.</strong><br>
+        {{ boost_error_message }}
+      </div>
+      <div class="text-center mb-4">
+        <a href="{{ url_for('my_listings') }}" class="btn btn-light btn-lg">Back to My Listings</a>
+      </div>
+    {% endif %}
+
+    {% if not boost_error_message %}
     <div class="plans-section">
       <div class="section-title">💎 Choose Your Boost Package</div>
       <div class="section-subtitle">Prices in INR | Valid for selected duration</div>
@@ -578,7 +589,7 @@
             </ul>
             <div class="plan-footer">
               <form method="POST" action="{{ url_for('payment_page') }}" style="display:inline;">
-                <input type="hidden" name="ad_id" value="{{ listing.id }}">
+                <input type="hidden" name="ad_id" value="{{ listing['id'] }}">
                 <input type="hidden" name="days" value="3">
                 <input type="hidden" name="price" value="19">
                 <input type="hidden" name="plan" value="basic">
@@ -611,7 +622,7 @@
             </ul>
             <div class="plan-footer">
               <form method="POST" action="{{ url_for('payment_page') }}" style="display:inline;">
-                <input type="hidden" name="ad_id" value="{{ listing.id }}">
+                <input type="hidden" name="ad_id" value="{{ listing['id'] }}">
                 <input type="hidden" name="days" value="7">
                 <input type="hidden" name="price" value="29">
                 <input type="hidden" name="plan" value="standard">
@@ -643,7 +654,7 @@
             </ul>
             <div class="plan-footer">
               <form method="POST" action="{{ url_for('payment_page') }}" style="display:inline;">
-                <input type="hidden" name="ad_id" value="{{ listing.id }}">
+                <input type="hidden" name="ad_id" value="{{ listing['id'] }}">
                 <input type="hidden" name="days" value="15">
                 <input type="hidden" name="price" value="49">
                 <input type="hidden" name="plan" value="popular">
@@ -675,7 +686,7 @@
             </ul>
             <div class="plan-footer">
               <form method="POST" action="{{ url_for('payment_page') }}" style="display:inline;">
-                <input type="hidden" name="ad_id" value="{{ listing.id }}">
+                <input type="hidden" name="ad_id" value="{{ listing['id'] }}">
                 <input type="hidden" name="days" value="30">
                 <input type="hidden" name="price" value="79">
                 <input type="hidden" name="plan" value="advanced">
@@ -708,7 +719,7 @@
             </ul>
             <div class="plan-footer">
               <form method="POST" action="{{ url_for('payment_page') }}" style="display:inline;">
-                <input type="hidden" name="ad_id" value="{{ listing.id }}">
+                <input type="hidden" name="ad_id" value="{{ listing['id'] }}">
                 <input type="hidden" name="days" value="45">
                 <input type="hidden" name="price" value="129">
                 <input type="hidden" name="plan" value="premium">
@@ -740,7 +751,7 @@
             </ul>
             <div class="plan-footer">
               <form method="POST" action="{{ url_for('payment_page') }}" style="display:inline;">
-                <input type="hidden" name="ad_id" value="{{ listing.id }}">
+                <input type="hidden" name="ad_id" value="{{ listing['id'] }}">
                 <input type="hidden" name="days" value="60">
                 <input type="hidden" name="price" value="199">
                 <input type="hidden" name="plan" value="ultimate">
@@ -837,7 +848,9 @@
         </table>
       </div>
     </div>
+    {% endif %}
 
+    {% if not boost_error_message %}
     <!-- Features Section -->
     <div class="features-section">
       <h3>✨ What You Get With Any Boost</h3>
@@ -864,6 +877,7 @@
         </div>
       </div>
     </div>
+    {% endif %}
 
     <!-- Footer -->
     <div class="footer-section">

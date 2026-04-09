@@ -3,10 +3,17 @@ Admin Routes - Complete Admin Dashboard Backend
 Handles all admin functionality: users, products, complaints, analytics
 """
 
-from flask import Blueprint, render_template, request, redirect, session, flash, url_for, jsonify
+from flask import Blueprint, render_template, request, redirect, session, flash, url_for, jsonify, current_app
 import mysql.connector
 from datetime import datetime, timedelta
 import json
+
+from transactions_helpers import (
+    map_payment_method,
+    map_transaction_status,
+    calculate_gst,
+    calculate_total
+)
 
 # Admin Blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -28,12 +35,63 @@ def get_db_connection():
         database="regear_db"
     )
 
+
+def table_exists(cursor, table_name):
+    cursor.execute(
+        """
+        SELECT COUNT(*) as count
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+          AND table_name = %s
+        """,
+        (table_name,)
+    )
+    return cursor.fetchone()["count"] > 0
+
+
+def column_exists(cursor, table_name, column_name):
+    cursor.execute(
+        """
+        SELECT COUNT(*) as count
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = %s
+          AND column_name = %s
+        """,
+        (table_name, column_name)
+    )
+    return cursor.fetchone()["count"] > 0
+
+
+def get_payment_total_expression(cursor):
+    if column_exists(cursor, "payments", "total_amount"):
+        return "COALESCE(total_amount,0)"
+    if column_exists(cursor, "payments", "amount"):
+        if column_exists(cursor, "payments", "gst"):
+            return "COALESCE(amount,0) + COALESCE(gst,0)"
+        return "COALESCE(amount,0)"
+    return "0"
+
+
+def get_payment_status_filter():
+    return "status IN ('completed', 'paid', 'success')"
+
+
+def safe_percent(new_value, old_value):
+    if old_value and old_value != 0:
+        return int(((new_value - old_value) / old_value) * 100)
+    return 100 if new_value > 0 else 0
+
+
 def admin_required(f):
     """Decorator to require admin access"""
     from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'user_id' not in session or session.get('role') != 'admin':
+            wants_json = request.args.get('json') == '1' or 'application/json' in request.headers.get('Accept', '')
+            if wants_json:
+                return jsonify({"error": "Admin access required"}), 401
             flash("❌ Admin access required!", "error")
             return redirect(url_for("home"))
         return f(*args, **kwargs)
@@ -58,159 +116,440 @@ def log_admin_action(admin_id, action, description, table_affected=None, record_
 # DASHBOARD ROUTES
 # ==============================
 
+def fetch_admin_dashboard_stats(cursor):
+    stats = {
+        "total_users": 0,
+        "active_users": 0,
+        "new_users_7_days": 0,
+        "new_users_today": 0,
+        "new_users_growth": 0,
+        "total_listings": 0,
+        "active_listings": 0,
+        "new_listings_7_days": 0,
+        "listings_today": 0,
+        "listings_growth": 0,
+        "boosted_ads_active": 0,
+        "total_transactions": 0,
+        "total_revenue": 0.0,
+        "revenue_month": 0.0,
+        "active_sellers": 0,
+        "blocked_users": 0,
+        "pending_complaints": 0,
+        "category_distribution": [],
+        "listings_growth_trend": [],
+        "revenue_trend": []
+    }
+
+    # User counts
+    cursor.execute("SELECT COUNT(*) as c FROM users")
+    stats["total_users"] = int(cursor.fetchone()["c"] or 0)
+
+    cursor.execute("SELECT COUNT(*) as c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+    stats["new_users_7_days"] = int(cursor.fetchone()["c"] or 0)
+
+    if column_exists(cursor, "users", "created_at"):
+        cursor.execute("SELECT COUNT(*) as c FROM users WHERE DATE(created_at)=CURDATE()")
+        stats["new_users_today"] = int(cursor.fetchone()["c"] or 0)
+        cursor.execute("SELECT COUNT(*) as c FROM users WHERE DATE(created_at)=DATE_SUB(CURDATE(), INTERVAL 1 DAY)")
+        yesterday_users = int(cursor.fetchone()["c"] or 0)
+        stats["new_users_growth"] = int(((stats["new_users_today"] - yesterday_users) / yesterday_users) * 100) if yesterday_users else (100 if stats["new_users_today"] > 0 else 0)
+
+    if column_exists(cursor, "users", "status"):
+        cursor.execute("SELECT COUNT(*) as c FROM users WHERE status='blocked'")
+        stats["blocked_users"] = int(cursor.fetchone()["c"] or 0)
+    elif column_exists(cursor, "users", "role"):
+        cursor.execute("SELECT COUNT(*) as c FROM users WHERE role='blocked'")
+        stats["blocked_users"] = int(cursor.fetchone()["c"] or 0)
+
+    if table_exists(cursor, "activity_logs") and column_exists(cursor, "activity_logs", "created_at"):
+        cursor.execute("SELECT COUNT(DISTINCT user_id) as c FROM activity_logs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        stats["active_users"] = int(cursor.fetchone()["c"] or 0)
+    else:
+        active_sources = []
+        if table_exists(cursor, "listings"):
+            active_sources.append("SELECT user_id FROM listings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        if table_exists(cursor, "payments"):
+            status_filter = get_payment_status_filter()
+            active_sources.append(f"SELECT user_id FROM payments WHERE {status_filter} AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        if table_exists(cursor, "messages") and column_exists(cursor, "messages", "sender_id"):
+            active_sources.append("SELECT sender_id as user_id FROM messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        if table_exists(cursor, "messages") and column_exists(cursor, "messages", "receiver_id"):
+            active_sources.append("SELECT receiver_id as user_id FROM messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        if active_sources:
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as c FROM (" + " UNION ALL ".join(active_sources) + ") t")
+            stats["active_users"] = int(cursor.fetchone()["c"] or 0)
+
+    if table_exists(cursor, "listings"):
+        cursor.execute("SELECT COUNT(*) as c FROM listings")
+        stats["total_listings"] = int(cursor.fetchone()["c"] or 0)
+
+        active_conditions = []
+        if column_exists(cursor, "listings", "approval_status"):
+            active_conditions.append("approval_status='approved'")
+        if column_exists(cursor, "listings", "status"):
+            active_conditions.append("status='active'")
+        if column_exists(cursor, "listings", "expires_date"):
+            active_conditions.append("(expires_date IS NULL OR expires_date >= NOW())")
+        if column_exists(cursor, "listings", "is_sold"):
+            active_conditions.append("COALESCE(is_sold,0)=0")
+
+        active_where = " AND ".join(active_conditions) if active_conditions else "1=1"
+        cursor.execute(f"SELECT COUNT(*) as c FROM listings WHERE {active_where}")
+        stats["active_listings"] = int(cursor.fetchone()["c"] or 0)
+
+        if column_exists(cursor, "listings", "created_at"):
+            cursor.execute("SELECT COUNT(*) as c FROM listings WHERE DATE(created_at)=CURDATE()")
+            stats["listings_today"] = int(cursor.fetchone()["c"] or 0)
+            cursor.execute("SELECT COUNT(*) as c FROM listings WHERE DATE(created_at)=DATE_SUB(CURDATE(), INTERVAL 1 DAY)")
+            yesterday_listings = int(cursor.fetchone()["c"] or 0)
+            stats["listings_growth"] = int(((stats["listings_today"] - yesterday_listings) / yesterday_listings) * 100) if yesterday_listings else (100 if stats["listings_today"] > 0 else 0)
+            cursor.execute("SELECT COUNT(*) as c FROM listings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+            stats["new_listings_7_days"] = int(cursor.fetchone()["c"] or 0)
+
+        if column_exists(cursor, "listings", "category"):
+            cursor.execute(f"""
+                SELECT category, COUNT(*) as c
+                FROM listings
+                WHERE category IS NOT NULL AND category <> ''
+                AND {active_where}
+                GROUP BY category
+                ORDER BY c DESC
+                LIMIT 10
+            """)
+            stats["category_distribution"] = [
+                {"category": row["category"], "count": int(row["c"] or 0)}
+                for row in cursor.fetchall()
+            ]
+
+        if column_exists(cursor, "listings", "created_at"):
+            cursor.execute("""
+                SELECT DATE(created_at) as date, COUNT(*) as count
+                FROM listings
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at)
+            """)
+            rows = cursor.fetchall()
+            counts_by_day = {}
+            for row in rows:
+                row_date = row["date"]
+                if isinstance(row_date, datetime):
+                    row_date = row_date.date()
+                counts_by_day[row_date] = int(row["count"] or 0)
+
+            start_date = datetime.now().date() - timedelta(days=29)
+            stats["listings_growth_trend"] = [
+                {"date": (start_date + timedelta(days=i)).strftime("%Y-%m-%d"),
+                 "count": counts_by_day.get(start_date + timedelta(days=i), 0)}
+                for i in range(30)
+            ]
+
+            # Daily user growth series for the last 30 days
+            if column_exists(cursor, "users", "created_at"):
+                cursor.execute("""
+                    SELECT DATE(created_at) as date, COUNT(*) as count
+                    FROM users
+                    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY DATE(created_at)
+                    ORDER BY DATE(created_at)
+                """)
+                user_rows = cursor.fetchall()
+                user_counts_by_day = {}
+                for row in user_rows:
+                    row_date = row["date"]
+                    if isinstance(row_date, datetime):
+                        row_date = row_date.date()
+                    user_counts_by_day[row_date] = int(row["count"] or 0)
+
+                stats["users_trend"] = [
+                    {"date": (start_date + timedelta(days=i)).strftime("%Y-%m-%d"),
+                     "count": user_counts_by_day.get(start_date + timedelta(days=i), 0)}
+                    for i in range(30)
+                ]
+            else:
+                stats["users_trend"] = []
+
+    if table_exists(cursor, "boosted_listings"):
+        cursor.execute("SELECT COUNT(*) as c FROM boosted_listings WHERE status='active' AND end_date >= NOW()")
+        stats["boosted_ads_active"] = int(cursor.fetchone()["c"] or 0)
+    elif table_exists(cursor, "ad_boosts"):
+        cursor.execute("SELECT COUNT(*) as c FROM ad_boosts WHERE status='active' AND expiry_date >= NOW()")
+        stats["boosted_ads_active"] = int(cursor.fetchone()["c"] or 0)
+
+    if table_exists(cursor, "transactions"):
+        cursor.execute("SELECT COUNT(*) as c FROM transactions WHERE status='completed'")
+        stats["total_transactions"] = int(cursor.fetchone()["c"] or 0)
+        cursor.execute("SELECT COALESCE(SUM(total_amount),0) as c FROM transactions WHERE status='completed'")
+        stats["total_revenue"] = float(cursor.fetchone()["c"] or 0)
+        cursor.execute("SELECT COALESCE(SUM(total_amount),0) as c FROM transactions WHERE status='completed' AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
+        stats["revenue_month"] = float(cursor.fetchone()["c"] or 0)
+        if column_exists(cursor, "transactions", "created_at"):
+            cursor.execute("""
+                SELECT DATE(created_at) as date, COALESCE(SUM(total_amount),0) as total
+                FROM transactions
+                WHERE status='completed'
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at)
+            """)
+            rows = cursor.fetchall()
+            counts_by_day = {}
+            for row in rows:
+                row_date = row["date"]
+                if isinstance(row_date, datetime):
+                    row_date = row_date.date()
+                counts_by_day[row_date] = float(row["total"] or 0)
+            start_date = datetime.now().date() - timedelta(days=29)
+            stats["revenue_trend"] = [
+                {"date": (start_date + timedelta(days=i)).strftime("%Y-%m-%d"),
+                 "total": float(counts_by_day.get(start_date + timedelta(days=i), 0))}
+                for i in range(30)
+            ]
+    elif table_exists(cursor, "payments"):
+        total_expr = get_payment_total_expression(cursor)
+        status_filter = get_payment_status_filter()
+        cursor.execute(f"SELECT COUNT(*) as c FROM payments WHERE {status_filter}")
+        stats["total_transactions"] = int(cursor.fetchone()["c"] or 0)
+        cursor.execute(f"SELECT COALESCE(SUM({total_expr}),0) as c FROM payments WHERE {status_filter}")
+        stats["total_revenue"] = float(cursor.fetchone()["c"] or 0)
+        cursor.execute(f"SELECT COALESCE(SUM({total_expr}),0) as c FROM payments WHERE {status_filter} AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
+        stats["revenue_month"] = float(cursor.fetchone()["c"] or 0)
+        if column_exists(cursor, "payments", "created_at"):
+            cursor.execute(f"""
+                SELECT DATE(created_at) as date, COALESCE(SUM({total_expr}),0) as total
+                FROM payments
+                WHERE {status_filter}
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                GROUP BY DATE(created_at)
+                ORDER BY DATE(created_at)
+            """)
+            rows = cursor.fetchall()
+            counts_by_day = {}
+            for row in rows:
+                row_date = row["date"]
+                if isinstance(row_date, datetime):
+                    row_date = row_date.date()
+                counts_by_day[row_date] = float(row["total"] or 0)
+            start_date = datetime.now().date() - timedelta(days=29)
+            stats["revenue_trend"] = [
+                {"date": (start_date + timedelta(days=i)).strftime("%Y-%m-%d"),
+                 "total": float(counts_by_day.get(start_date + timedelta(days=i), 0))}
+                for i in range(30)
+            ]
+
+    if table_exists(cursor, "subscriptions"):
+        cursor.execute("SELECT COUNT(DISTINCT user_id) as c FROM subscriptions WHERE status='active'")
+        stats["active_sellers"] = int(cursor.fetchone()["c"] or 0)
+    elif table_exists(cursor, "user_subscriptions"):
+        cursor.execute("SELECT COUNT(DISTINCT user_id) as c FROM user_subscriptions WHERE status='active' AND end_date > NOW()")
+        stats["active_sellers"] = int(cursor.fetchone()["c"] or 0)
+    elif column_exists(cursor, "users", "seller_active"):
+        extra_clause = "AND (subscription_end IS NULL OR subscription_end > NOW())" if column_exists(cursor, "users", "subscription_end") else ""
+        cursor.execute(f"SELECT COUNT(*) as c FROM users WHERE seller_active=1 {extra_clause}")
+        stats["active_sellers"] = int(cursor.fetchone()["c"] or 0)
+
+    if table_exists(cursor, "complaints") and column_exists(cursor, "complaints", "status"):
+        cursor.execute("SELECT COUNT(*) as c FROM complaints WHERE status='pending'")
+        stats["pending_complaints"] = int(cursor.fetchone()["c"] or 0)
+
+    # Revenue growth vs previous month
+    if table_exists(cursor, "transactions") and column_exists(cursor, "transactions", "created_at"):
+        try:
+            cursor.execute("SELECT COALESCE(SUM(total_amount),0) as c FROM transactions WHERE status='completed' AND YEAR(created_at)=YEAR(DATE_SUB(NOW(), INTERVAL 1 MONTH)) AND MONTH(created_at)=MONTH(DATE_SUB(NOW(), INTERVAL 1 MONTH))")
+            previous_month = float(cursor.fetchone()["c"] or 0)
+            stats["revenue_growth"] = safe_percent(stats["revenue_month"], previous_month)
+        except Exception:
+            stats["revenue_growth"] = 0
+    elif table_exists(cursor, "payments") and column_exists(cursor, "payments", "created_at"):
+        try:
+            total_expr = get_payment_total_expression(cursor)
+            status_filter = get_payment_status_filter()
+            cursor.execute(f"SELECT COALESCE(SUM({total_expr}),0) as c FROM payments WHERE {status_filter} AND YEAR(created_at)=YEAR(DATE_SUB(NOW(), INTERVAL 1 MONTH)) AND MONTH(created_at)=MONTH(DATE_SUB(NOW(), INTERVAL 1 MONTH))")
+            previous_month = float(cursor.fetchone()["c"] or 0)
+            stats["revenue_growth"] = safe_percent(stats["revenue_month"], previous_month)
+        except Exception:
+            stats["revenue_growth"] = 0
+
+    # User growth for last 7 days vs previous 7 days
+    try:
+        cursor.execute("SELECT COUNT(*) as c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        recent_week = int(cursor.fetchone()["c"] or 0)
+        cursor.execute("SELECT COUNT(*) as c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)")
+        previous_week = int(cursor.fetchone()["c"] or 0)
+        stats["user_growth"] = safe_percent(recent_week, previous_week)
+    except Exception:
+        stats["user_growth"] = 0
+
+    # Top categories summary
+    stats["top_categories"] = stats.get("category_distribution", [])[:6]
+
+    # Subscription stats
+    stats["subscription_stats"] = {
+        "starter": 0,
+        "growth": 0,
+        "premium": 0,
+        "active_subscriptions": 0,
+        "expiring_soon": 0,
+        "expired": 0
+    }
+    if table_exists(cursor, "user_subscriptions"):
+        try:
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as c FROM user_subscriptions WHERE status='active' AND end_date > NOW()")
+            stats["subscription_stats"]["active_subscriptions"] = int(cursor.fetchone()["c"] or 0)
+        except Exception:
+            pass
+        try:
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as c FROM user_subscriptions WHERE status='active' AND end_date <= DATE_ADD(NOW(), INTERVAL 7 DAY)")
+            stats["subscription_stats"]["expiring_soon"] = int(cursor.fetchone()["c"] or 0)
+        except Exception:
+            pass
+        try:
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as c FROM user_subscriptions WHERE (status != 'active' OR end_date <= NOW())")
+            stats["subscription_stats"]["expired"] = int(cursor.fetchone()["c"] or 0)
+        except Exception:
+            pass
+        try:
+            cursor.execute("SELECT plan_name, COUNT(DISTINCT user_id) as c FROM user_subscriptions WHERE status='active' AND end_date > NOW() GROUP BY plan_name")
+            for row in cursor.fetchall():
+                plan_name = (row["plan_name"] or "").strip().lower()
+                count = int(row["c"] or 0)
+                if plan_name in ["starter", "basic"]:
+                    stats["subscription_stats"]["starter"] += count
+                elif plan_name in ["growth", "standard"]:
+                    stats["subscription_stats"]["growth"] += count
+                elif plan_name in ["pro", "premium"]:
+                    stats["subscription_stats"]["premium"] += count
+                else:
+                    stats["subscription_stats"][plan_name] = stats["subscription_stats"].get(plan_name, 0) + count
+        except Exception:
+            pass
+
+    # Boost performance stats
+    stats["boost_stats"] = {
+        "active_boosts": stats.get("boosted_ads_active", 0),
+        "boosted_listings": 0,
+        "boost_revenue": 0.0
+    }
+    if table_exists(cursor, "ad_boosts"):
+        try:
+            cursor.execute("SELECT COUNT(DISTINCT ad_id) as c FROM ad_boosts WHERE status='active' AND expiry_date > NOW()")
+            stats["boost_stats"]["boosted_listings"] = int(cursor.fetchone()["c"] or 0)
+        except Exception:
+            pass
+    elif table_exists(cursor, "boosted_listings"):
+        try:
+            cursor.execute("SELECT COUNT(DISTINCT listing_id) as c FROM boosted_listings WHERE status='active' AND end_date >= NOW()")
+            stats["boost_stats"]["boosted_listings"] = int(cursor.fetchone()["c"] or 0)
+        except Exception:
+            pass
+    if table_exists(cursor, "payments"):
+        try:
+            total_expr = get_payment_total_expression(cursor)
+            status_filter = get_payment_status_filter()
+            if column_exists(cursor, "payments", "type"):
+                cursor.execute(f"SELECT COALESCE(SUM({total_expr}),0) as c FROM payments WHERE type='boost' AND {status_filter}")
+            else:
+                cursor.execute(f"SELECT COALESCE(SUM({total_expr}),0) as c FROM payments p JOIN ad_boosts b ON b.payment_id = p.id WHERE {status_filter}")
+            stats["boost_stats"]["boost_revenue"] = float(cursor.fetchone()["c"] or 0)
+        except Exception:
+            stats["boost_stats"]["boost_revenue"] = 0.0
+
+    # Listing status breakdown
+    stats["listing_status_breakdown"] = {
+        "active": stats.get("active_listings", 0),
+        "sold": 0,
+        "pending": 0
+    }
+    if table_exists(cursor, "listings"):
+        try:
+            cursor.execute("SELECT COUNT(*) as c FROM listings WHERE status='sold' OR approval_status='sold'")
+            stats["listing_status_breakdown"]["sold"] = int(cursor.fetchone()["c"] or 0)
+        except Exception:
+            pass
+        try:
+            cursor.execute("SELECT COUNT(*) as c FROM listings WHERE approval_status='pending' OR status='pending'")
+            stats["listing_status_breakdown"]["pending"] = int(cursor.fetchone()["c"] or 0)
+        except Exception:
+            pass
+
+    # Smart insights
+    stats["smart_insights"] = []
+    if stats.get("revenue_growth", 0) < 0:
+        stats["smart_insights"].append(f"Revenue dropped {abs(stats['revenue_growth'])}% compared to last month")
+    else:
+        stats["smart_insights"].append(f"Revenue increased {stats['revenue_growth']}% compared to last month")
+    if stats.get("user_growth", 0) < 0:
+        stats["smart_insights"].append(f"User growth is down {abs(stats['user_growth'])}% vs last week")
+    else:
+        stats["smart_insights"].append(f"User growth is up {stats['user_growth']}% vs last week")
+    if stats.get("new_users_today", 0) == 0 and stats.get("total_users", 0) > 0:
+        stats["smart_insights"].append("No new users registered today ⚠")
+    if stats.get("active_users", 0) == 0 and stats.get("total_users", 0) > 0:
+        stats["smart_insights"].append("No active users in the last 7 days ⚠")
+    if stats.get("top_categories"):
+        category_name = stats["top_categories"][0]["category"] if stats["top_categories"] else None
+        if category_name:
+            stats["smart_insights"].append(f"Most active category: {category_name}")
+
+    # Ensure naming matches frontend conventions
+    stats["totalUsers"] = stats["total_users"]
+    stats["activeUsers"] = stats["active_users"]
+    stats["newUsersToday"] = stats["new_users_today"]
+    stats["totalListings"] = stats["total_listings"]
+    stats["activeListings"] = stats["active_listings"]
+    stats["boostedAds"] = stats["boosted_ads_active"]
+    stats["revenueThisMonth"] = stats["revenue_month"]
+    stats["revenueGrowth"] = stats["revenue_growth"]
+    stats["userGrowth"] = stats["user_growth"]
+    stats["revenueTrend"] = stats["revenue_trend"]
+    stats["listingsTrend"] = stats["listings_growth_trend"]
+    stats["subscriptionStats"] = stats["subscription_stats"]
+    stats["boostStats"] = stats["boost_stats"]
+    stats["topCategories"] = stats["top_categories"]
+    stats["listingStatusBreakdown"] = stats["listing_status_breakdown"]
+    stats["smartInsights"] = stats["smart_insights"]
+    stats["usersTrend"] = stats.get("users_trend", [])
+
+    return stats
+
+
 @admin_bp.route("/dashboard")
 @admin_required
 def dashboard():
-    """Main admin dashboard with statistics"""
+    """Render admin dashboard or return dashboard stats as JSON"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # Get dashboard statistics
-        stats = {}
-
-        # Total Users
-        cursor.execute("SELECT COUNT(*) as count FROM users WHERE role != 'admin'")
-        stats['total_users'] = cursor.fetchone()['count']
-
-        # Active users (logged in today)
-        cursor.execute("""
-            SELECT COUNT(DISTINCT user_id) as count FROM activity_logs 
-            WHERE DATE(created_at) = CURDATE()
-        """)
-        stats['active_users'] = cursor.fetchone()['count'] or 0
-
-        # Blocked users
-        cursor.execute("SELECT COUNT(*) as count FROM users WHERE role='blocked'")
-        stats['blocked_users'] = cursor.fetchone()['count']
-
-        # Total listings
-        cursor.execute("SELECT COUNT(*) as count FROM listings")
-        stats['total_listings'] = cursor.fetchone()['count']
-
-        # Pending approval
-        cursor.execute("SELECT COUNT(*) as count FROM listings WHERE approval_status='pending'")
-        stats['pending_listings'] = cursor.fetchone()['count']
-
-        # Approved listings
-        cursor.execute("SELECT COUNT(*) as count FROM listings WHERE approval_status='approved'")
-        stats['approved_listings'] = cursor.fetchone()['count']
-
-        # Sold products
-        cursor.execute("SELECT COUNT(*) as count FROM listings WHERE approval_status='sold'")
-        stats['sold_listings'] = cursor.fetchone()['count']
-
-        # Active subscriptions
-        try:
-            cursor.execute("SELECT COUNT(*) as count FROM user_subscriptions WHERE status='active' AND end_date > NOW()")
-            stats['active_subscriptions'] = cursor.fetchone()['count']
-        except Exception:
-            stats['active_subscriptions'] = 0
-
-        # Expired subscriptions
-        try:
-            cursor.execute("SELECT COUNT(*) as count FROM user_subscriptions WHERE status != 'active' OR end_date <= NOW()")
-            stats['expired_subscriptions'] = cursor.fetchone()['count']
-        except Exception:
-            stats['expired_subscriptions'] = 0
-
-        # Boosted listings count
-        try:
-            cursor.execute("SELECT COUNT(*) as count FROM boosted_listings")
-            stats['boosted_listings'] = cursor.fetchone()['count']
-        except Exception:
-            stats['boosted_listings'] = 0
-
-        # Daily user growth
-        try:
-            cursor.execute("SELECT COUNT(*) as count FROM users WHERE DATE(created_at)=CURDATE() AND role != 'admin'")
-            stats['new_users_today'] = cursor.fetchone()['count']
-            cursor.execute("SELECT COUNT(*) as count FROM users WHERE DATE(created_at)=DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND role != 'admin'")
-            yesterday = cursor.fetchone()['count']
-            stats['new_users_growth'] = int(((stats['new_users_today'] - yesterday) / yesterday) * 100) if yesterday else (100 if stats['new_users_today'] > 0 else 0)
-        except Exception:
-            stats['new_users_today'] = 0
-            stats['new_users_growth'] = 0
-
-        # Daily listing growth
-        try:
-            cursor.execute("SELECT COUNT(*) as count FROM listings WHERE DATE(created_at)=CURDATE()")
-            stats['listings_today'] = cursor.fetchone()['count']
-            cursor.execute("SELECT COUNT(*) as count FROM listings WHERE DATE(created_at)=DATE_SUB(CURDATE(), INTERVAL 1 DAY)")
-            yesterday_listings = cursor.fetchone()['count']
-            stats['listings_growth'] = int(((stats['listings_today'] - yesterday_listings) / yesterday_listings) * 100) if yesterday_listings else (100 if stats['listings_today'] > 0 else 0)
-        except Exception:
-            stats['listings_today'] = 0
-            stats['listings_growth'] = 0
-
-        # Total transactions
-        try:
-            cursor.execute("SELECT COUNT(*) as count FROM payments")
-            stats['total_transactions'] = cursor.fetchone()['count']
-        except Exception:
-            stats['total_transactions'] = 0
-
-        # Revenue this month
-        try:
-            cursor.execute("SELECT COALESCE(SUM(amount),0) as count FROM payments WHERE status IN ('success','paid') AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
-            stats['revenue_month'] = cursor.fetchone()['count']
-        except Exception:
-            stats['revenue_month'] = 0
-
-        # Total complaints
-        cursor.execute("SELECT COUNT(*) as count FROM complaints WHERE status='pending'")
-        stats['pending_complaints'] = cursor.fetchone()['count']
-
-        # Recent listings (last 7 days)
-        cursor.execute("""
-            SELECT DATE(created_at) as date, COUNT(*) as count 
-            FROM listings 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            GROUP BY DATE(created_at)
-            ORDER BY date
-        """)
-        stats['recent_listings'] = cursor.fetchall()
-
-        # Recent users (last 7 days)
-        cursor.execute("""
-            SELECT DATE(created_at) as date, COUNT(*) as count 
-            FROM users 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND role != 'admin'
-            GROUP BY DATE(created_at)
-            ORDER BY date
-        """)
-        stats['recent_users'] = cursor.fetchall()
-
-        # Recent activity
-        cursor.execute("""
-            SELECT u.username, al.activity_type, al.description, al.created_at
-            FROM activity_logs al
-            JOIN users u ON al.user_id = u.id
-            ORDER BY al.created_at DESC
-            LIMIT 10
-        """)
-        stats['recent_activity'] = cursor.fetchall()
-
-        # Top sellers (by listing count)
-        cursor.execute("""
-            SELECT u.username, COUNT(l.id) as listing_count
-            FROM users u
-            LEFT JOIN listings l ON u.id = l.user_id
-            WHERE u.role = 'seller'
-            GROUP BY u.id
-            ORDER BY listing_count DESC
-            LIMIT 5
-        """)
-        stats['top_sellers'] = cursor.fetchall()
-
+        wants_json = request.args.get("json") == "1" or 'application/json' in request.headers.get('Accept', '')
+        if wants_json:
+            stats = fetch_admin_dashboard_stats(cursor)
+            return jsonify(stats)
+        return render_template("admin/admin_dashboard.html")
+    except Exception as e:
+        current_app.logger.error(f"Error loading admin dashboard: {e}")
+        if request.args.get("json") == "1":
+            return jsonify({"error": "Unable to load dashboard data"}), 500
+        flash(f"❌ Error loading dashboard: {str(e)}", "error")
+        return redirect(url_for("home"))
+    finally:
         cursor.close()
         conn.close()
 
-        return render_template("admin/admin_dashboard.html", stats=stats)
-
+@admin_bp.route("/api/dashboard")
+@admin_required
+def dashboard_api():
+    """Return JSON dashboard metrics for admin pages."""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        stats = fetch_admin_dashboard_stats(cursor)
+        return jsonify(stats)
     except Exception as e:
-        flash(f"❌ Error loading dashboard: {str(e)}", "error")
-        return redirect(url_for("home"))
+        current_app.logger.error(f"Error returning admin dashboard JSON: {e}")
+        return jsonify({"error": "Unable to load dashboard data"}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 # ==============================
 # BOOSTED LISTINGS
@@ -223,6 +562,28 @@ def boosted_listings():
     try:
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
+        # Sync any active ad_boosts into boosted_listings so admin can see them
+        try:
+            cur.execute("""
+                INSERT INTO boosted_listings (listing_id, seller_id, boost_type, start_date, end_date, status, created_at)
+                SELECT b.ad_id, b.user_id,
+                       COALESCE(bp.boost_type, 'standard'),
+                       b.start_date, b.expiry_date, 'active', b.created_at
+                FROM ad_boosts b
+                LEFT JOIN boosted_listings bl
+                    ON bl.listing_id = b.ad_id
+                    AND bl.seller_id = b.user_id
+                    AND bl.start_date = b.start_date
+                    AND bl.end_date = b.expiry_date
+                LEFT JOIN boost_packages bp ON b.package_id = bp.id
+                WHERE b.status = 'active'
+                  AND b.expiry_date > NOW()
+                  AND bl.id IS NULL
+            """)
+            conn.commit()
+        except Exception as sync_err:
+            current_app.logger.warning(f"Could not sync active ad_boosts to boosted_listings: {sync_err}")
+
         # Fetch from boosted_listings table as requested
         cur.execute("""
             SELECT bl.id, bl.listing_id, bl.seller_id, bl.boost_type, 
@@ -238,7 +599,7 @@ def boosted_listings():
         cur.close()
         conn.close()
     except Exception as e:
-        app.logger.error(f"Error fetching boosted listings: {e}")
+        current_app.logger.error(f"Error fetching boosted listings: {e}")
         records = []
     return render_template("admin/admin_boosted.html", records=records)
 
@@ -445,213 +806,380 @@ def manage_categories():
 # ==============================
 # TRANSACTIONS & REVENUE
 # ==============================
+
+def ensure_transactions_table(cursor):
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            type ENUM('subscription','boost') NOT NULL,
+            reference_id INT NULL,
+            base_amount DECIMAL(10,2) NOT NULL,
+            gst_amount DECIMAL(10,2) NOT NULL,
+            total_amount DECIMAL(10,2) NOT NULL,
+            payment_method ENUM('UPI','Card','Wallet') NOT NULL,
+            status ENUM('completed','failed','refunded') NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_transactions_status (status),
+            INDEX idx_transactions_type (type),
+            INDEX idx_transactions_payment_method (payment_method),
+            INDEX idx_transactions_created_at (created_at)
+        )
+    """)
+
+
+def build_transaction_filters(args, exclude_month=False):
+    filters = {
+        'month': args.get('month', ''),
+        'payment_method': args.get('payment_method', ''),
+        'type': args.get('type', ''),
+        'status': args.get('status', '')
+    }
+    clauses = []
+    params = []
+
+    if filters['month'] and not exclude_month:
+        clauses.append("DATE_FORMAT(t.created_at, '%b %Y') = %s")
+        params.append(filters['month'])
+    if filters['payment_method']:
+        clauses.append("t.payment_method = %s")
+        params.append(filters['payment_method'])
+    if filters['type'] in ['subscription', 'boost']:
+        clauses.append("t.type = %s")
+        params.append(filters['type'])
+    if filters['status'] in ['completed', 'failed', 'refunded']:
+        clauses.append("t.status = %s")
+        params.append(filters['status'])
+    else:
+        clauses.append("t.status = 'completed'")
+
+    where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
+    return where_sql, tuple(params), filters
+
+
+def migrate_legacy_transactions(cursor):
+    if not table_exists(cursor, 'transactions'):
+        ensure_transactions_table(cursor)
+
+    cursor.execute("SELECT COUNT(*) as count FROM transactions")
+    existing_count = int(cursor.fetchone().get('count') or 0)
+    if existing_count > 0:
+        return
+
+    if table_exists(cursor, 'payments'):
+        cursor.execute("""
+            SELECT p.id, p.user_id, p.amount, p.gst, p.total_amount, p.method, p.status,
+                   p.created_at, b.id AS boost_id, st.id AS subscription_id,
+                   COALESCE(st.payment_method, p.method) AS st_payment_method,
+                   COALESCE(st.payment_status, p.status) AS st_payment_status
+            FROM payments p
+            LEFT JOIN ad_boosts b ON b.payment_id = p.id
+            LEFT JOIN subscription_transactions st ON st.transaction_id = p.transaction_id AND st.user_id = p.user_id
+        """)
+        for row in cursor.fetchall():
+            tx_type = 'boost' if row.get('boost_id') else 'subscription' if row.get('subscription_id') else None
+            if not tx_type:
+                continue
+            reference_id = row.get('boost_id') or row.get('subscription_id')
+            base_amount = row.get('amount')
+            if base_amount is None:
+                if row.get('total_amount') is not None and row.get('gst') is not None:
+                    base_amount = float(row['total_amount']) - float(row['gst'])
+                else:
+                    base_amount = float(row.get('total_amount') or 0)
+            gst_amount = float(row['gst']) if row.get('gst') is not None else calculate_gst(base_amount)
+            payment_method = map_payment_method(row.get('method') or row.get('st_payment_method'))
+            status = map_transaction_status(row.get('status') or row.get('st_payment_status'))
+            total_amount = float(row['total_amount']) if row.get('total_amount') is not None else calculate_total(base_amount)
+            cursor.execute("""
+                INSERT INTO transactions (user_id, type, reference_id, base_amount, gst_amount, total_amount, payment_method, status, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                row['user_id'], tx_type, reference_id, float(base_amount), gst_amount, total_amount, payment_method, status, row['created_at']
+            ))
+
+    if table_exists(cursor, 'subscription_transactions'):
+        cursor.execute("""
+            SELECT st.id, st.user_id, st.amount, st.payment_method, st.payment_status, st.created_at
+            FROM subscription_transactions st
+            LEFT JOIN payments p ON p.transaction_id = st.transaction_id AND p.user_id = st.user_id
+            WHERE p.id IS NULL
+        """)
+        for row in cursor.fetchall():
+            base_amount = row.get('amount') or 0
+            gst_amount = calculate_gst(base_amount)
+            payment_method = map_payment_method(row.get('payment_method'))
+            status = map_transaction_status(row.get('payment_status'))
+            total_amount = calculate_total(base_amount)
+            cursor.execute("""
+                INSERT INTO transactions (user_id, type, reference_id, base_amount, gst_amount, total_amount, payment_method, status, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                row['user_id'], 'subscription', row['id'], float(base_amount), gst_amount, total_amount, payment_method, status, row['created_at']
+            ))
+
+
+def fetch_transactions_stats(cursor, where_sql, params):
+    cursor.execute(f"SELECT COUNT(*) as count, COALESCE(SUM(total_amount),0) as total, COALESCE(AVG(total_amount),0) as avg_amount FROM transactions t {where_sql}", params)
+    row = cursor.fetchone() or {}
+    if where_sql:
+        month_sql = f"SELECT COALESCE(SUM(total_amount),0) as month_total FROM transactions t {where_sql} AND YEAR(t.created_at)=YEAR(NOW()) AND MONTH(t.created_at)=MONTH(NOW())"
+        month_params = params
+    else:
+        month_sql = "SELECT COALESCE(SUM(total_amount),0) as month_total FROM transactions t WHERE YEAR(t.created_at)=YEAR(NOW()) AND MONTH(t.created_at)=MONTH(NOW())"
+        month_params = ()
+    cursor.execute(month_sql, month_params)
+    month_row = cursor.fetchone() or {}
+    total = float(row.get('total') or 0)
+    month_total = float(month_row.get('month_total') or 0)
+    count = int(row.get('count') or 0)
+    avg_amount = float(row.get('avg_amount') or 0)
+    return {
+        'total_revenue': total,
+        'monthly_revenue': month_total,
+        'total_transactions': count,
+        'avg_transaction': avg_amount,
+        'totalRevenue': total,
+        'monthlyRevenue': month_total,
+        'totalTransactions': count,
+        'avgTransaction': avg_amount
+    }
+
+
+def fetch_transactions_rows(cursor, where_sql, params, limit=200):
+    joins = []
+    has_subscription_transactions = table_exists(cursor, 'subscription_transactions')
+    has_ad_boosts = table_exists(cursor, 'ad_boosts')
+    has_boost_packages = table_exists(cursor, 'boost_packages')
+    has_listings = table_exists(cursor, 'listings')
+
+    if has_subscription_transactions:
+        joins.append("LEFT JOIN subscription_transactions st ON t.type='subscription' AND t.reference_id = st.id")
+    if has_ad_boosts:
+        joins.append("LEFT JOIN ad_boosts b ON t.type='boost' AND t.reference_id = b.id")
+    if has_boost_packages and has_ad_boosts:
+        joins.append("LEFT JOIN boost_packages bp ON b.package_id = bp.id")
+    if has_listings and has_ad_boosts:
+        joins.append("LEFT JOIN listings l ON b.ad_id = l.id")
+
+    join_sql = '\n        '.join(joins)
+
+    query = f"""
+        SELECT
+            t.id,
+            t.user_id,
+            u.username AS name,
+            u.email,
+            t.type,
+            t.reference_id,
+            t.base_amount,
+            t.gst_amount,
+            t.total_amount,
+            t.payment_method,
+            t.status,
+            t.created_at,
+            COALESCE(
+                CASE WHEN t.type='subscription' THEN st.plan_name END,
+                CASE WHEN t.type='boost' THEN bp.name END,
+                CONCAT(UPPER(t.type), ' Transaction')
+            ) as plan_name,
+            CASE WHEN t.type='boost' THEN COALESCE(b.status, 'unknown') ELSE 'N/A' END as promotion_status,
+            COALESCE(l.status, l.approval_status, 'N/A') as listing_status,
+            COALESCE(l.title, 'Unknown Listing') as listing_title
+        FROM transactions t
+        LEFT JOIN users u ON u.id = t.user_id
+        {join_sql}
+        {where_sql}
+        ORDER BY t.created_at DESC
+        LIMIT {limit}
+    """
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    output = []
+    for row in rows:
+        output.append({
+            'id': row['id'],
+            'user_name': row.get('name') or 'Unknown',
+            'user_email': row.get('email') or '',
+            'type': row['type'],
+            'plan_name': row.get('plan_name') or 'Unknown',
+            'base_amount': float(row.get('base_amount') or 0),
+            'gst_amount': float(row.get('gst_amount') or 0),
+            'total_amount': float(row.get('total_amount') or 0),
+            'payment_method': row.get('payment_method') or 'Unknown',
+            'promotion_status': row.get('promotion_status') or 'N/A',
+            'listing_status': row.get('listing_status') or 'N/A',
+            'created_at': row.get('created_at').isoformat() if row.get('created_at') else None,
+            'date': row.get('created_at').isoformat() if row.get('created_at') else None,
+            'status': row.get('status') or 'unknown',
+            'listing_title': row.get('listing_title') or 'N/A',
+            'reference_id': row.get('reference_id')
+        })
+    return output
+
+
+def fetch_transaction_charts(cursor, where_sql, params):
+    charts = {
+        'monthlyRevenue': [],
+        'paymentMethods': [],
+        'revenueByType': []
+    }
+
+    cursor.execute(f"""
+        SELECT DATE_FORMAT(created_at, '%b %Y') as period, COALESCE(SUM(total_amount),0) as total
+        FROM transactions t
+        {where_sql}
+        GROUP BY DATE_FORMAT(created_at, '%b %Y')
+        ORDER BY MIN(created_at) DESC
+        LIMIT 12
+    """, params)
+    rows = cursor.fetchall()
+    charts['monthlyRevenue'] = [
+        {'label': row['period'], 'value': float(row['total'] or 0)}
+        for row in rows
+    ]
+
+    cursor.execute(f"""
+        SELECT payment_method, COUNT(*) as count
+        FROM transactions t
+        {where_sql}
+        GROUP BY payment_method
+    """, params)
+    rows = cursor.fetchall()
+    charts['paymentMethods'] = [
+        {'method': row['payment_method'] or 'Unknown', 'count': int(row['count'] or 0)}
+        for row in rows
+    ]
+
+    cursor.execute(f"""
+        SELECT type, COALESCE(SUM(total_amount),0) as total
+        FROM transactions t
+        {where_sql}
+        GROUP BY type
+    """, params)
+    rows = cursor.fetchall()
+    charts['revenueByType'] = [
+        {'type': row['type'] or 'Unknown', 'total': float(row['total'] or 0)}
+        for row in rows
+    ]
+
+    return charts
+
+
+def available_transaction_filters(cursor):
+    months = []
+    if table_exists(cursor, 'transactions'):
+        cursor.execute("""
+            SELECT DATE_FORMAT(created_at, '%b %Y') as ym
+            FROM transactions
+            GROUP BY ym
+            ORDER BY MAX(created_at) DESC
+        """)
+        months = [row['ym'] for row in cursor.fetchall()]
+    return {
+        'months': months,
+        'payment_methods': ['UPI', 'Card', 'Wallet'],
+        'types': ['subscription', 'boost'],
+        'statuses': ['completed', 'failed', 'refunded']
+    }
+
+
+def compute_filtered_transactions(cursor, args):
+    where_sql, params, filters = build_transaction_filters(args)
+    stats = fetch_transactions_stats(cursor, where_sql, params)
+    transactions = fetch_transactions_rows(cursor, where_sql, params)
+    charts = fetch_transaction_charts(cursor, where_sql, params)
+    return {
+        'success': True,
+        'stats': stats,
+        'transactions': transactions,
+        'charts': charts,
+        'filters': available_transaction_filters(cursor),
+        'applied_filters': filters
+    }
+
+
 @admin_bp.route("/revenue")
 @admin_required
 def revenue():
-    payments = []
-    stats = {
-        "total_revenue": 0,
-        "monthly_revenue": 0,
-        "total_transactions": 0,
-        "avg_transaction": 0
-    }
-    monthly_revenue_labels = []
-    monthly_revenue_data = []
-    payment_method_labels = []
-    payment_method_counts = []
-    available_months = []
-    selected_month = request.args.get('month', '')
-    payment_method = request.args.get('method', '')
+    return render_template("admin/admin_payments.html")
 
+
+@admin_bp.route("/transactions")
+@admin_required
+def transactions_api():
     try:
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-
-        # Stats
-        try:
-            cur.execute("SELECT COALESCE(SUM(amount),0) as total FROM payments WHERE status='paid'")
-            stats["total_revenue"] = cur.fetchone()["total"]
-        except Exception:
-            stats["total_revenue"] = 0
-
-        try:
-            cur.execute("SELECT COALESCE(SUM(amount),0) as total FROM payments WHERE status='paid' AND YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
-            stats["monthly_revenue"] = cur.fetchone()["total"]
-        except Exception:
-            stats["monthly_revenue"] = 0
-
-        try:
-            cur.execute("SELECT COUNT(*) as cnt, COALESCE(AVG(amount),0) as avg_amt FROM payments WHERE status='paid'")
-            row = cur.fetchone()
-            stats["total_transactions"] = row["cnt"]
-            stats["avg_transaction"] = row["avg_amt"]
-        except Exception:
-            pass
-
-        # Monthly revenue trend (last 6 months)
-        try:
-            cur.execute("""
-                SELECT DATE_FORMAT(created_at, '%b %Y') as ym, SUM(amount) as amt
-                FROM payments 
-                WHERE status='paid' 
-                AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-                GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-                ORDER BY MIN(created_at)
-            """)
-            rows = cur.fetchall()
-            monthly_revenue_labels = [r["ym"] for r in rows]
-            monthly_revenue_data = [float(r["amt"]) for r in rows]
-        except Exception:
-            monthly_revenue_labels = []
-            monthly_revenue_data = []
-
-        # Payment method distribution
-        try:
-            cur.execute("""
-                SELECT method as payment_method, COUNT(*) as cnt 
-                FROM payments 
-                WHERE status='paid'
-                GROUP BY method
-            """)
-            rows = cur.fetchall()
-            payment_method_labels = [ (r["payment_method"] or "unknown").title().replace('_',' ') for r in rows ]
-            payment_method_counts = [ r["cnt"] for r in rows ]
-        except Exception:
-            payment_method_labels = []
-            payment_method_counts = []
-
-        # Available months dropdown
-        try:
-            cur.execute("""
-                SELECT DISTINCT DATE_FORMAT(created_at, '%b %Y') as ym
-                FROM payments
-                ORDER BY MIN(created_at) DESC
-            """)
-            available_months = [r["ym"] for r in cur.fetchall()]
-        except Exception:
-            available_months = []
-
-        # Payments table (join users and compute gst/total)
-        where = []
-        params = []
-        if selected_month:
-            where.append("DATE_FORMAT(p.created_at, '%b %Y') = %s")
-            params.append(selected_month)
-        if payment_method:
-            where.append("p.method = %s")
-            params.append(payment_method)
-        where_sql = (" WHERE " + " AND ".join(where)) if where else ""
-        try:
-            cur.execute(f"""
-                SELECT p.id, p.user_id, p.amount, p.method as payment_method, 
-                       COALESCE(p.status, st.payment_status) as status, p.created_at as paid_at,
-                       u.username, u.email,
-                       COALESCE(bp.name, CONCAT('Subscription Plan - ', st.plan_name)) as package_name,
-                       CASE WHEN bp.name IS NOT NULL THEN 'Boost' ELSE 'Subscription' END as transaction_type,
-                       l.status as listing_status,
-                       COALESCE(b.status, '') as promotion_status
-                FROM payments p
-                JOIN users u ON p.user_id = u.id
-                LEFT JOIN listings l ON l.id = p.ad_id
-                LEFT JOIN boost_packages bp ON bp.id = p.package_id
-                LEFT JOIN subscription_transactions st ON st.transaction_id = p.transaction_id AND st.user_id = p.user_id
-                LEFT JOIN ad_boosts b ON b.payment_id = p.id
-                {where_sql}
-                ORDER BY p.created_at DESC
-                LIMIT 200
-            """, tuple(params))
-            rows = cur.fetchall()
-            payments = []
-            for r in rows:
-                amt = float(r["amount"] or 0)
-                gst = round(amt * 0.18, 2)
-                total = round(amt + gst, 2)
-                payments.append({
-                    "id": r["id"],
-                    "username": r.get("username", "User"),
-                    "email": r.get("email", ""),
-                    "plan": r.get("package_name"),
-                    "amount": amt,
-                    "gst": gst,
-                    "total_amount": total,
-                    "payment_method": r.get("payment_method", "unknown"),
-                    "paid_at": r.get("paid_at"),
-                    "transaction_type": r.get("transaction_type", "Unknown"),
-                    "status": r.get("status", "unknown"),
-                    "listing_status": r.get("listing_status"),
-                    "promotion_status": r.get("promotion_status")
-                })
-        except Exception:
-            payments = []
-
-        # Include legacy subscription-only transactions not yet mirrored in payments
-        try:
-            legacy_where = []
-            legacy_params = []
-            if selected_month:
-                legacy_where.append("DATE_FORMAT(st.created_at, '%b %Y') = %s")
-                legacy_params.append(selected_month)
-            if payment_method:
-                legacy_where.append("st.payment_method = %s")
-                legacy_params.append(payment_method)
-            if legacy_where:
-                legacy_sql = "WHERE " + " AND ".join(legacy_where) + " AND p.id IS NULL"
-            else:
-                legacy_sql = "WHERE p.id IS NULL"
-            cur.execute(f"""
-                SELECT st.id, st.user_id, st.amount, st.payment_method, st.payment_status as status, st.created_at as paid_at,
-                       u.username, u.email,
-                       CONCAT('Subscription Plan - ', st.plan_name) as package_name,
-                       'Subscription' as transaction_type
-                FROM subscription_transactions st
-                JOIN users u ON u.id = st.user_id
-                LEFT JOIN payments p ON p.transaction_id = st.transaction_id AND p.user_id = st.user_id
-                {legacy_sql}
-                ORDER BY st.created_at DESC
-                LIMIT 100
-            """, tuple(legacy_params))
-            legacy_rows = cur.fetchall()
-            for r in legacy_rows:
-                amt = float(r["amount"] or 0)
-                gst = round(amt * 0.18, 2)
-                total = round(amt + gst, 2)
-                payments.append({
-                    "id": f"sub_{r['id']}",
-                    "username": r.get("username", "User"),
-                    "email": r.get("email", ""),
-                    "plan": r.get("package_name"),
-                    "amount": amt,
-                    "gst": gst,
-                    "total_amount": total,
-                    "payment_method": r.get("payment_method", "unknown"),
-                    "paid_at": r.get("paid_at"),
-                    "transaction_type": r.get("transaction_type", "Subscription"),
-                    "status": r.get("status", "pending"),
-                    "listing_status": None,
-                    "promotion_status": None
-                })
-        except Exception:
-            pass
-
-        payments.sort(key=lambda x: x.get('paid_at') or datetime.now(), reverse=True)
-
+        if not table_exists(cur, 'transactions'):
+            ensure_transactions_table(cur)
+        migrate_legacy_transactions(cur)
+        conn.commit()
+        response = compute_filtered_transactions(cur, request.args)
         cur.close()
         conn.close()
-    except Exception:
-        pass
+        return jsonify(response)
+    except Exception as e:
+        current_app.logger.error(f"Error loading transactions API: {e}")
+        return jsonify({'success': False, 'message': 'Unable to load transactions'}), 500
 
-    return render_template(
-        "admin/admin_payments.html",
-        payments=payments,
-        stats=stats,
-        monthly_revenue_labels=monthly_revenue_labels,
-        monthly_revenue_data=monthly_revenue_data,
-        payment_method_labels=payment_method_labels,
-        payment_method_counts=payment_method_counts,
-        available_months=available_months,
-        selected_month=selected_month,
-        payment_method=payment_method
-    )
+
+@admin_bp.route("/revenue-stats")
+@admin_required
+def revenue_stats():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        if not table_exists(cur, 'transactions'):
+            ensure_transactions_table(cur)
+        migrate_legacy_transactions(cur)
+        conn.commit()
+        where_sql, params, _ = build_transaction_filters(request.args)
+        stats = fetch_transactions_stats(cur, where_sql, params)
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        current_app.logger.error(f"Error loading revenue stats: {e}")
+        return jsonify({'success': False, 'message': 'Unable to load revenue stats'}), 500
+
+
+@admin_bp.route("/transactions/refund/<int:transaction_id>", methods=["POST"])
+@admin_required
+def refund_transaction(transaction_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        if not table_exists(cur, 'transactions'):
+            return jsonify({'success': False, 'message': 'Transactions table not found'}), 404
+
+        cur.execute("SELECT * FROM transactions WHERE id=%s", (transaction_id,))
+        tx = cur.fetchone()
+        if not tx:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'Transaction not found'}), 404
+
+        if tx['status'] == 'refunded':
+            cur.close()
+            conn.close()
+            return jsonify({'success': True, 'message': 'Transaction already refunded'})
+
+        cur.execute("UPDATE transactions SET status='refunded' WHERE id=%s", (transaction_id,))
+        if tx['type'] == 'boost' and tx['reference_id']:
+            cur.execute("UPDATE ad_boosts SET status='refunded' WHERE id=%s", (tx['reference_id'],))
+            cur.execute("UPDATE payments p JOIN ad_boosts b ON b.payment_id = p.id SET p.status='refunded' WHERE b.id=%s", (tx['reference_id'],))
+        elif tx['type'] == 'subscription' and tx['reference_id']:
+            cur.execute("UPDATE subscription_transactions SET payment_status='refunded' WHERE id=%s", (tx['reference_id'],))
+            cur.execute("UPDATE payments p JOIN subscription_transactions st ON p.transaction_id = st.transaction_id SET p.status='refunded' WHERE st.id=%s", (tx['reference_id'],))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Transaction refunded successfully'})
+    except Exception as e:
+        current_app.logger.error(f"Error refunding transaction: {e}")
+        return jsonify({'success': False, 'message': 'Refund failed'}), 500
 
 # ==============================
 # ANALYTICS & INSIGHTS
@@ -663,59 +1191,119 @@ def analytics():
     try:
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        # KPIs
+        # KPI counts
         try:
             cur.execute("SELECT COUNT(*) as c FROM users WHERE role!='admin'")
-            total_users = cur.fetchone()["c"]
+            total_users = int(cur.fetchone()["c"] or 0)
         except Exception:
             total_users = 0
         try:
             cur.execute("SELECT COUNT(*) as c FROM listings")
-            total_listings = cur.fetchone()["c"]
+            total_listings = int(cur.fetchone()["c"] or 0)
         except Exception:
             total_listings = 0
         try:
-            cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='active' AND approval_status='approved'")
-            active_listings = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='active'")
+            active_listings = int(cur.fetchone()["c"] or 0)
         except Exception:
             active_listings = 0
-        # boosted ads
-        try:
-            cur.execute("SELECT COUNT(*) as c FROM ad_boosts WHERE status='active' AND expiry_date>NOW()")
-            boosted_ads = cur.fetchone()["c"]
-        except Exception:
-            boosted_ads = 0
-        # revenue
-        try:
-            cur.execute("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE status IN ('success','paid')")
-            total_revenue = float(cur.fetchone()["s"] or 0)
-        except Exception:
-            total_revenue = 0.0
-        # new users this week
-        try:
-            cur.execute("SELECT COUNT(*) as c FROM users WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)")
-            new_users_week = cur.fetchone()["c"]
-        except Exception:
-            new_users_week = 0
-        # delta vs previous week
+        # Active sellers: active listing OR active boost OR active subscription
         try:
             cur.execute("""
-                SELECT 
-                  SUM(CASE WHEN created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as this_wk,
-                  SUM(CASE WHEN created_at<DATE_SUB(NOW(), INTERVAL 7 DAY) AND created_at>=DATE_SUB(NOW(), INTERVAL 14 DAY) THEN 1 ELSE 0 END) as prev_wk
+                SELECT COUNT(DISTINCT user_id) as c FROM (
+                    SELECT user_id FROM listings WHERE status='active'
+                    UNION
+                    SELECT user_id FROM ad_boosts WHERE status='active' AND expiry_date > NOW()
+                    UNION
+                    SELECT user_id FROM user_subscriptions WHERE status='active' AND end_date > NOW()
+                ) t
+            """)
+            active_sellers = int(cur.fetchone()["c"] or 0)
+        except Exception:
+            active_sellers = 0
+        try:
+            cur.execute("SELECT COUNT(DISTINCT user_id) as c FROM listings")
+            total_sellers = int(cur.fetchone()["c"] or 0)
+        except Exception:
+            total_sellers = 0
+        # Revenue from successful transactions only
+        try:
+            if table_exists(cur, 'transactions'):
+                cur.execute("SELECT COALESCE(SUM(total_amount),0) as s FROM transactions WHERE status='completed'")
+                total_revenue = float(cur.fetchone()["s"] or 0)
+            else:
+                total_expr = get_payment_total_expression(cur)
+                status_filter = get_payment_status_filter()
+                cur.execute(f"SELECT COALESCE(SUM({total_expr}),0) as s FROM payments WHERE {status_filter}")
+                total_revenue = float(cur.fetchone()["s"] or 0)
+        except Exception:
+            total_revenue = 0.0
+        try:
+            if table_exists(cur, 'transactions'):
+                cur.execute("SELECT COALESCE(SUM(total_amount),0) as s FROM transactions WHERE type='boost' AND status='completed'")
+                boost_revenue = float(cur.fetchone()["s"] or 0)
+            else:
+                total_expr = get_payment_total_expression(cur)
+                status_filter = get_payment_status_filter()
+                if column_exists(cur, "payments", "type"):
+                    cur.execute(f"SELECT COALESCE(SUM({total_expr}),0) as s FROM payments WHERE type='boost' AND {status_filter}")
+                else:
+                    cur.execute(f"""
+                        SELECT COALESCE(SUM({total_expr}),0) as s
+                        FROM payments p
+                        JOIN ad_boosts b ON b.payment_id = p.id
+                        WHERE {status_filter}
+                    """)
+                boost_revenue = float(cur.fetchone()["s"] or 0)
+        except Exception:
+            boost_revenue = 0.0
+        try:
+            if table_exists(cur, 'transactions'):
+                cur.execute("SELECT COALESCE(SUM(total_amount),0) as s FROM transactions WHERE type='subscription' AND status='completed'")
+                subscription_revenue = float(cur.fetchone()["s"] or 0)
+            else:
+                total_expr = get_payment_total_expression(cur)
+                status_filter = get_payment_status_filter()
+                if column_exists(cur, "payments", "type"):
+                    cur.execute(f"SELECT COALESCE(SUM({total_expr}),0) as s FROM payments WHERE type='subscription' AND {status_filter}")
+                else:
+                    cur.execute(f"""
+                        SELECT COALESCE(SUM({total_expr}),0) as s
+                        FROM payments p
+                        LEFT JOIN subscription_transactions st ON st.transaction_id = p.transaction_id AND st.user_id = p.user_id
+                        WHERE {status_filter}
+                          AND st.id IS NOT NULL
+                    """)
+                subscription_revenue = float(cur.fetchone()["s"] or 0)
+        except Exception:
+            subscription_revenue = 0.0
+        # New users in last 7 days
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+            new_users_week = int(cur.fetchone()["c"] or 0)
+        except Exception:
+            new_users_week = 0
+        try:
+            cur.execute("""
+                SELECT
+                  SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as this_wk,
+                  SUM(CASE WHEN created_at < DATE_SUB(NOW(), INTERVAL 7 DAY) AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY) THEN 1 ELSE 0 END) as prev_wk
                 FROM users
             """)
             r = cur.fetchone()
-            new_users_week_prev = int(r["prev_wk"] or 0)
-            new_users_week_delta = new_users_week - new_users_week_prev
+            prev_week = int(r["prev_wk"] or 0)
+            new_users_week_delta = new_users_week - prev_week
         except Exception:
             new_users_week_delta = 0
-        # revenue by month (last 6-8 months)
+        # Revenue by month for chart
         rev_labels, rev_values = [], []
         try:
-            cur.execute("""
-                SELECT DATE_FORMAT(created_at,'%b %Y') as ym, SUM(amount) as amt, MIN(created_at) as d
-                FROM payments WHERE status IN ('success','paid')
+            total_expr = get_payment_total_expression(cur)
+            status_filter = get_payment_status_filter()
+            cur.execute(f"""
+                SELECT DATE_FORMAT(created_at,'%b %Y') as ym, SUM({total_expr}) as amt, MIN(created_at) as d
+                FROM payments
+                WHERE {status_filter}
                 GROUP BY DATE_FORMAT(created_at,'%Y-%m')
                 ORDER BY MIN(created_at) ASC
                 LIMIT 12
@@ -725,141 +1313,242 @@ def analytics():
             rev_values = [float(r["amt"] or 0) for r in rows]
         except Exception:
             pass
-        # revenue growth percent MoM
         revenue_growth_pct = 0
         if len(rev_values) >= 2:
             prev = rev_values[-2] or 0
             curr = rev_values[-1] or 0
             revenue_growth_pct = int(((curr - prev) / prev) * 100) if prev else (100 if curr > 0 else 0)
-        # listings per day (last 14 days)
+        # Listings over last 14 days
         lst_day_labels, lst_day_counts = [], []
         try:
             cur.execute("""
                 SELECT DATE(created_at) as d, COUNT(*) as c
                 FROM listings
-                WHERE created_at>=DATE_SUB(NOW(), INTERVAL 14 DAY)
-                GROUP BY DATE(created_at) ORDER BY d
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                GROUP BY DATE(created_at)
+                ORDER BY d
             """)
             rows = cur.fetchall()
             lst_day_labels = [r["d"].strftime("%d %b") for r in rows]
             lst_day_counts = [int(r["c"] or 0) for r in rows]
         except Exception:
             pass
-        # active vs sold
+        # Active vs sold
         active_vs_sold = [0, 0]
         try:
             cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='active'")
-            active_vs_sold[0] = cur.fetchone()["c"]
+            active_vs_sold[0] = int(cur.fetchone()["c"] or 0)
             cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='sold' OR approval_status='sold'")
-            active_vs_sold[1] = cur.fetchone()["c"]
+            active_vs_sold[1] = int(cur.fetchone()["c"] or 0)
         except Exception:
             pass
-        # listings by category & top 10
+        # Category breakdown
         cat_labels, cat_counts = [], []
         try:
             cur.execute("""
-                SELECT category, COUNT(*) as c FROM listings
-                GROUP BY category ORDER BY c DESC LIMIT 10
+                SELECT category, COUNT(*) as c
+                FROM listings
+                WHERE category IS NOT NULL AND category <> ''
+                GROUP BY category
+                ORDER BY c DESC
+                LIMIT 10
             """)
             rows = cur.fetchall()
             cat_labels = [r["category"] for r in rows if r["category"]]
-            cat_counts = [int(r["c"]) for r in rows if r["category"]]
+            cat_counts = [int(r["c"] or 0) for r in rows if r["category"]]
         except Exception:
             pass
-        top_category = cat_labels[0] if cat_labels else ""
-        top_category_count = cat_counts[0] if cat_counts else 0
-        # user growth daily (last 14 days)
+        top_category = ""
+        top_category_count = 0
+        top_category_percentage = 0
+        try:
+            cur.execute("SELECT COUNT(*) as c FROM listings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")
+            total_recent_listings = int(cur.fetchone()["c"] or 0)
+            cur.execute("""
+                SELECT category, COUNT(*) as c
+                FROM listings
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                  AND category IS NOT NULL
+                  AND category <> ''
+                GROUP BY category
+                ORDER BY c DESC
+                LIMIT 1
+            """)
+            row = cur.fetchone()
+            if row:
+                top_category = row["category"] or ""
+                top_category_count = int(row["c"] or 0)
+                top_category_percentage = int((top_category_count / total_recent_listings) * 100) if total_recent_listings else 0
+        except Exception:
+            top_category = ""
+            top_category_count = 0
+            top_category_percentage = 0
+        # Average listing price
+        avg_listing_price = 0.0
+        try:
+            cur.execute("""
+                SELECT
+                  COUNT(*) as c,
+                  COALESCE(SUM(CAST(price AS DECIMAL(12,2))),0) as s
+                FROM listings
+                WHERE price IS NOT NULL
+                  AND price <> ''
+                  AND (price + 0) > 0
+            """)
+            row = cur.fetchone()
+            total_price_items = int(row["c"] or 0)
+            total_price_sum = float(row["s"] or 0)
+            avg_listing_price = round(total_price_sum / total_price_items, 2) if total_price_items else 0.0
+        except Exception:
+            avg_listing_price = 0.0
+        # User growth daily
         usr_day_labels, usr_day_counts = [], []
         try:
             cur.execute("""
                 SELECT DATE(created_at) as d, COUNT(*) as c
                 FROM users
-                WHERE created_at>=DATE_SUB(NOW(), INTERVAL 14 DAY)
-                GROUP BY DATE(created_at) ORDER BY d
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                GROUP BY DATE(created_at)
+                ORDER BY d
             """)
             rows = cur.fetchall()
             usr_day_labels = [r["d"].strftime("%d %b") for r in rows]
             usr_day_counts = [int(r["c"] or 0) for r in rows]
         except Exception:
             pass
-        # new users this month/year
+        # New users this month/year
         try:
-            cur.execute("SELECT COUNT(*) as c FROM users WHERE YEAR(created_at)=YEAR(NOW()) AND MONTH(created_at)=MONTH(NOW())")
-            new_users_this_month = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")
+            new_users_this_month = int(cur.fetchone()["c"] or 0)
         except Exception:
             new_users_this_month = 0
         try:
-            cur.execute("SELECT COUNT(*) as c FROM users WHERE YEAR(created_at)=YEAR(NOW())")
-            new_users_this_year = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 365 DAY)")
+            new_users_this_year = int(cur.fetchone()["c"] or 0)
         except Exception:
             new_users_this_year = 0
-        # health metrics
+        # Health metrics
         listing_completion_rate = 0
         user_engagement_rate = 0
         boost_usage_pct = 0
         active_users_7d = 0
         try:
-            cur.execute("SELECT COUNT(*) as c FROM listings")
-            total_l = cur.fetchone()["c"] or 0
-            cur.execute("SELECT COUNT(*) as c FROM listings WHERE COALESCE(description,'')<>'' AND COALESCE(photos,'')<>''")
-            complete_l = cur.fetchone()["c"] or 0
-            listing_completion_rate = int((complete_l/total_l)*100) if total_l else 0
+            cur.execute("""
+                SELECT COUNT(*) as total,
+                  SUM(CASE WHEN COALESCE(title,'') <> ''
+                            AND COALESCE(description,'') <> ''
+                            AND price IS NOT NULL
+                            AND (price + 0) > 0
+                            AND COALESCE(category,'') <> ''
+                            AND COALESCE(location,'') <> '' THEN 1 ELSE 0 END) as complete
+                FROM listings
+            """)
+            row = cur.fetchone()
+            total_l = int(row["total"] or 0)
+            complete_l = int(row["complete"] or 0)
+            listing_completion_rate = int((complete_l / total_l) * 100) if total_l else 0
         except Exception:
             pass
         try:
-            # engagement: messages in last 7 days per active listing ratio scaled to %
-            cur.execute("SELECT COUNT(*) as c FROM messages WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)")
-            msg7 = cur.fetchone()["c"] or 0
+            cur.execute("SELECT COUNT(*) as c FROM messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+            msg7 = int(cur.fetchone()["c"] or 0)
             cur.execute("SELECT COUNT(*) as c FROM listings WHERE status='active'")
-            act = cur.fetchone()["c"] or 0
-            user_engagement_rate = min(100, int((msg7 / max(act,1)) * 20))  # heuristic scale
+            act = int(cur.fetchone()["c"] or 0)
+            user_engagement_rate = min(100, int((msg7 / max(act,1)) * 20))
         except Exception:
             pass
         try:
-            boost_usage_pct = int((boosted_ads / max(active_listings,1)) * 100) if active_listings else 0
+            cur.execute("SELECT COUNT(DISTINCT ad_id) as c FROM ad_boosts WHERE status='active' AND expiry_date > NOW()")
+            boosts_total = int(cur.fetchone()["c"] or 0)
         except Exception:
-            pass
+            boosts_total = 0
+        try:
+            boost_usage_pct = int((boosts_total / total_listings) * 100) if total_listings else 0
+        except Exception:
+            boost_usage_pct = 0
         try:
             cur.execute("""
                 SELECT COUNT(DISTINCT user_id) as c FROM (
-                    SELECT user_id, created_at FROM listings WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)
+                    SELECT user_id FROM listings WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                     UNION ALL
-                    SELECT sender_id as user_id, created_at FROM messages WHERE created_at>=DATE_SUB(NOW(), INTERVAL 7 DAY)
+                    SELECT sender_id as user_id FROM messages WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                 ) t
             """)
-            active_users_7d = cur.fetchone()["c"] or 0
+            active_users_7d = int(cur.fetchone()["c"] or 0)
         except Exception:
-            pass
-        # boosted ads performance
-        boosts_total, boosts_revenue, boosted_cat_labels, boosted_cat_counts = 0, 0, [], []
+            active_users_7d = 0
+        # Boosted ads performance
+        boosts_revenue = 0.0
+        boosted_cat_labels, boosted_cat_counts = [], []
         try:
-            cur.execute("SELECT COUNT(*) as c FROM ad_boosts")
-            boosts_total = cur.fetchone()["c"] or 0
+            cur.execute("SELECT COUNT(DISTINCT ad_id) as c FROM ad_boosts WHERE status='active' AND expiry_date > NOW()")
+            boosts_total = int(cur.fetchone()["c"] or 0)
         except Exception:
-            pass
+            boosts_total = 0
         try:
-            cur.execute("SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE package_id IS NOT NULL AND status IN ('success','paid')")
+            cur.execute("SELECT COALESCE(SUM(total_amount),0) as s FROM payments WHERE type='boost' AND status='success'")
             boosts_revenue = float(cur.fetchone()["s"] or 0)
         except Exception:
-            pass
+            boosts_revenue = 0.0
         try:
             cur.execute("""
                 SELECT l.category, COUNT(*) as c
                 FROM ad_boosts b
-                JOIN listings l ON b.ad_id=l.id
+                JOIN listings l ON b.ad_id = l.id
+                WHERE b.status='active' AND b.expiry_date > NOW()
                 GROUP BY l.category
                 ORDER BY c DESC
                 LIMIT 5
             """)
             rows = cur.fetchall()
             boosted_cat_labels = [r["category"] for r in rows if r["category"]]
-            boosted_cat_counts = [int(r["c"]) for r in rows if r["category"]]
+            boosted_cat_counts = [int(r["c"] or 0) for r in rows if r["category"]]
         except Exception:
-            pass
-        # automatic insights
+            boosted_cat_labels = []
+            boosted_cat_counts = []
+        # Churn rate for subscription users
+        churn_rate = 0
+        try:
+            cur.execute("""
+                SELECT COUNT(*) as churned
+                FROM (
+                    SELECT user_id,
+                      MAX(CASE WHEN status='active' AND end_date > NOW() THEN 1 ELSE 0 END) as has_active,
+                      MAX(end_date) as last_end
+                    FROM user_subscriptions
+                    GROUP BY user_id
+                ) t
+                WHERE has_active = 0 AND last_end <= NOW()
+            """)
+            churned_users = int(cur.fetchone()["churned"] or 0)
+            cur.execute("SELECT COUNT(DISTINCT user_id) as total FROM user_subscriptions")
+            total_subscribed_users = int(cur.fetchone()["total"] or 0)
+            churn_rate = int((churned_users / total_subscribed_users) * 100) if total_subscribed_users else 0
+        except Exception:
+            churn_rate = 0
+        # Subscription mix by active plan
+        subscription_mix = {"basic": 0, "standard": 0, "premium": 0}
+        try:
+            cur.execute("""
+                SELECT plan_name, COUNT(DISTINCT user_id) as c
+                FROM user_subscriptions
+                WHERE status='active' AND end_date > NOW()
+                GROUP BY plan_name
+            """)
+            for r in cur.fetchall():
+                plan = (r["plan_name"] or "").lower()
+                if plan == 'starter' or plan == 'basic':
+                    subscription_mix['basic'] = int(r['c'] or 0)
+                elif plan == 'growth' or plan == 'standard':
+                    subscription_mix['standard'] = int(r['c'] or 0)
+                elif plan == 'pro' or plan == 'premium':
+                    subscription_mix['premium'] = int(r['c'] or 0)
+        except Exception:
+            subscription_mix = {"basic": 0, "standard": 0, "premium": 0}
+        # Automatic insights
         auto_insights = []
         try:
-            auto_insights.append(f"Revenue {'increased' if revenue_growth_pct>=0 else 'decreased'} {abs(revenue_growth_pct)}% compared to last month")
+            auto_insights.append(f"Revenue {'increased' if revenue_growth_pct >= 0 else 'decreased'} {abs(revenue_growth_pct)}% compared to last month")
             if top_category:
                 auto_insights.append(f"'{top_category}' has the highest listings")
             if new_users_week_delta >= 0:
@@ -868,37 +1557,39 @@ def analytics():
                 auto_insights.append("User registrations decreased this week")
         except Exception:
             pass
-        # recent activity
+        # Recent activity
         recent = []
         try:
             cur.execute("SELECT 'user' as t, username as title, created_at FROM users ORDER BY created_at DESC LIMIT 5")
-            recent += [{"type":"user","title":r["title"],"created_at":r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
+            recent += [{"type": "user", "title": r["title"], "created_at": r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
         except Exception:
             pass
         try:
             cur.execute("SELECT 'listing' as t, title, created_at FROM listings ORDER BY created_at DESC LIMIT 5")
-            recent += [{"type":"listing","title":r["title"],"created_at":r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
+            recent += [{"type": "listing", "title": r["title"], "created_at": r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
         except Exception:
             pass
         try:
             cur.execute("""
-                SELECT 'boost' as t, CONCAT('Boost purchased for Ad #', ad_id) as title, created_at 
-                FROM payments WHERE package_id IS NOT NULL ORDER BY created_at DESC LIMIT 5
+                SELECT 'boost' as t, CONCAT('Boost purchased for Ad #', ad_id) as title, created_at
+                FROM payments WHERE type='boost' AND status='success'
+                ORDER BY created_at DESC LIMIT 5
             """)
-            recent += [{"type":"boost","title":r["title"],"created_at":r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
+            recent += [{"type": "boost", "title": r["title"], "created_at": r["created_at"].strftime("%d %b %H:%M")} for r in cur.fetchall()]
         except Exception:
             pass
-        # finalize insights
         insights = {
             "kpis": {
                 "total_users": total_users,
                 "total_listings": total_listings,
                 "active_listings": active_listings,
-                "boosted_ads": boosted_ads,
+                "boosted_ads": boosts_total,
                 "total_revenue": int(total_revenue),
                 "new_users_week": new_users_week,
                 "new_users_week_delta": new_users_week_delta
             },
+            "active_sellers": active_sellers,
+            "seller_activity_rate": int((active_sellers / total_sellers) * 100) if total_sellers else 0,
             "revenue_month_labels": rev_labels,
             "revenue_month_totals": rev_values,
             "revenue_growth_pct": revenue_growth_pct,
@@ -909,27 +1600,30 @@ def analytics():
             "category_counts": cat_counts,
             "top_category": top_category,
             "top_category_count": top_category_count,
+            "top_category_percentage": top_category_percentage,
             "user_day_labels": usr_day_labels,
             "user_day_counts": usr_day_counts,
+            "new_users_this_week": new_users_week,
             "new_users_this_month": new_users_this_month,
             "new_users_this_year": new_users_this_year,
-            "avg_users_per_day": int(sum(usr_day_counts)/max(len(usr_day_counts),1)),
+            "avg_users_per_day": int(sum(usr_day_counts) / max(len(usr_day_counts), 1)),
             "listing_completion_rate": listing_completion_rate,
             "user_engagement_rate": user_engagement_rate,
             "boost_usage_pct": boost_usage_pct,
             "active_users_7d": active_users_7d,
             "boosts_total": boosts_total,
             "boosts_revenue": int(boosts_revenue),
+            "subscription_revenue": int(subscription_revenue),
             "boosted_cat_labels": boosted_cat_labels,
             "boosted_cat_counts": boosted_cat_counts,
             "auto_insights": auto_insights,
             "recent": recent,
-            "seller_activity_rate": 0,
-            "subscription_mix": { "basic": 0, "standard": 0, "premium": 0 },
+            "subscription_mix": subscription_mix,
             "peak_revenue_day": "",
             "most_sold_category": "",
-            "avg_listing_price": 0,
-            "churn_rate": 0
+            "avg_listing_price": avg_listing_price,
+            "churn_rate": churn_rate,
+            "low_data": total_users < 50 or total_listings < 50
         }
         cur.close()
         conn.close()
@@ -1186,7 +1880,7 @@ def manage_products():
                 _f.write(f"---\nTime: {datetime.now()}\nError: {str(e)}\nTrace:\n{tb}\n")
         except Exception:
             pass
-        app.logger.exception("Error loading admin products")
+        current_app.logger.exception("Error loading admin products")
         flash(f"❌ Error loading products: {str(e)}", "error")
         return redirect(url_for("admin.dashboard"))
 

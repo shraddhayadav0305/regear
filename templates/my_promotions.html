@@ -32,39 +32,43 @@
     <div class="row g-3">
       <div class="col-12">
         <div class="section-card p-3">
-          <h5 class="mb-3"><i class="fas fa-bullhorn text-danger"></i> Active Promotions</h5>
-          {% if (active and active|length>0) or active_subscription %}
+          <h5 class="mb-3"><i class="fas fa-user-clock text-info"></i> Active Subscription</h5>
+          {% if active_subscription %}
+            <div class="promo-card">
+              <div class="fw-semibold">{{ active_subscription.plan_name }}</div>
+              <div class="small muted">Start: {{ active_subscription.start_date }}</div>
+              <div class="small muted">Expiry: {{ active_subscription.end_date }}</div>
+              <div class="small">Ads Remaining: {{ active_subscription.remaining if active_subscription.remaining != -1 else 'Unlimited' }}</div>
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">No active subscription found.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="section-card p-3">
+          <h5 class="mb-3"><i class="fas fa-bullhorn text-danger"></i> Active Boosts</h5>
+          {% if active_boosts and active_boosts|length > 0 %}
             <div class="row g-3">
-              {% for a in active %}
+              {% for a in active_boosts %}
               <div class="col-12">
                 <div class="promo-card d-flex align-items-center justify-content-between">
                   <div class="d-flex align-items-center gap-3">
                     <img class="promo-img" src="{{ (a.photos.split(',')[0]|imgurl) if a.photos else '' }}" alt="" onerror="this.style.display='none'">
                     <div>
-                      <div class="fw-semibold">{{ a.listing_title or 'Deleted Listing' }}</div>
-                      <div class="small muted">Plan: {{ a.package_name }} • Paid: ₹{{ a.amount|int if a.amount else '—' }}</div>
-                      <div class="small"><span class="muted">Start:</span> {{ a.start_date }} • <span class="muted">Expiry:</span> {{ a.expiry_date }}</div>
+                      <div class="fw-semibold">{{ a.listing_title }}</div>
+                      <div class="small muted">Boost Type: {{ a.package_name or 'Ad Boost' }}</div>
+                      <div class="small"><span class="muted">Start:</span> {{ a.start_date }} • <span class="muted">End:</span> {{ a.expiry_date }}</div>
                     </div>
                   </div>
                   <span class="badge badge-active pill">Active</span>
                 </div>
               </div>
               {% endfor %}
-              {% if active_subscription %}
-              <div class="col-12">
-                <div class="promo-card d-flex align-items-center justify-content-between">
-                  <div>
-                    <div class="fw-semibold">Subscription Active: {{ active_subscription.plan_name }}</div>
-                    <div class="small muted">Boost limit: {{ active_subscription.ad_limit if active_subscription.ad_limit != -1 else 'Unlimited' }}</div>
-                    <div class="small">Remaining: {{ active_subscription.remaining if active_subscription.remaining != -1 else 'Unlimited' }} • Expires: {{ active_subscription.end_date }}</div>
-                  </div>
-                  <span class="badge badge-active pill">Active</span>
-                </div>
-              </div>
-              {% endif %}
             </div>
           {% else %}
-            <div class="text-center text-muted py-4">No active promotions currently.</div>
+            <div class="text-center text-muted py-4">No active boosts currently.</div>
           {% endif %}
         </div>
       </div>
@@ -77,7 +81,7 @@
               <thead class="table-light">
                 <tr>
                   <th>Product</th>
-                  <th>Plan</th>
+                  <th>Boost Type</th>
                   <th>Amount</th>
                   <th>Start</th>
                   <th>End</th>
@@ -85,19 +89,19 @@
                 </tr>
               </thead>
               <tbody>
-                {% if history and history|length>0 %}
-                  {% for h in history %}
+                {% if boost_history and boost_history|length > 0 %}
+                  {% for h in boost_history %}
                   <tr>
-                    <td>{{ h.listing_title or 'Deleted Listing' }}</td>
-                    <td>{{ h.package_name }}</td>
-                    <td>₹{{ h.amount|int if h.amount else '—' }}</td>
+                    <td>{{ h.listing_title }}</td>
+                    <td>{{ h.package_name or 'Ad Boost' }}</td>
+                    <td>₹{{ h.transaction_total_amount|int if h.transaction_total_amount else h.payment_amount|int if h.payment_amount else '—' }}</td>
                     <td>{{ h.start_date }}</td>
                     <td>{{ h.expiry_date }}</td>
                     <td>
                       {% if h.resolved_status == 'expired' %}
                         <span class="badge badge-expired pill">Expired</span>
                       {% elif h.resolved_status == 'listing_deleted' %}
-                        <span class="badge badge-deleted pill">Listing Deleted</span>
+                        <span class="badge badge-deleted pill">Product Removed</span>
                       {% else %}
                         <span class="badge badge-active pill">{{ h.resolved_status|capitalize }}</span>
                       {% endif %}
@@ -105,7 +109,7 @@
                   </tr>
                   {% endfor %}
                 {% else %}
-                  <tr><td colspan="6" class="text-center text-muted py-4">No past promotions</td></tr>
+                  <tr><td colspan="6" class="text-center text-muted py-4">No past boosts yet</td></tr>
                 {% endif %}
               </tbody>
             </table>
@@ -115,25 +119,24 @@
 
       <div class="col-12">
         <div class="section-card p-3">
-          <h5 class="mb-3"><i class="fas fa-credit-card text-primary"></i> Payment History</h5>
-          {% if payments and payments|length>0 %}
+          <h5 class="mb-3"><i class="fas fa-credit-card text-primary"></i> Subscription Payments</h5>
+          {% if subscription_payments and subscription_payments|length > 0 %}
             <div class="row g-3">
-              {% for p in payments %}
+              {% for p in subscription_payments %}
               <div class="col-12">
                 <div class="promo-card d-flex justify-content-between align-items-center">
                   <div>
                     <div class="fw-semibold">Amount: ₹{{ p.amount|int }}</div>
                     <div class="small">
-                      <i class="" id="m{{ p.id }}"></i>
-                      <script>document.getElementById('m{{ p.id }}').className = iconForMethod('{{ p.payment_method }}');</script>
+                      <i class="" id="subm{{ p.id }}"></i>
+                      <script>document.getElementById('subm{{ p.id }}').className = iconForMethod('{{ p.payment_method }}');</script>
                       <span class="muted">Method:</span> {{ p.payment_method|replace('_',' ')|title }}
-                      • <span class="muted">Purpose:</span> {{ p.package_name or 'Ad Boost' }}
-                      • <span class="muted">Product:</span> {{ p.listing_title or 'Deleted Listing' }}
+                      • <span class="muted">Plan:</span> {{ p.package_name }}
                     </div>
-                    <div class="small"><span class="muted">Transaction ID:</span> {{ p.transaction_id or 'N/A' }} • <span class="muted">Date:</span> {{ p.created_at }}</div>
+                    <div class="small"><span class="muted">Transaction ID:</span> {{ p.transaction_id }} • <span class="muted">Date:</span> {{ p.created_at }}</div>
                   </div>
                   <div class="d-flex align-items-center gap-2">
-                    {% if p.payment_status in ['success','paid'] %}
+                    {% if p.payment_status in ['success','paid','completed'] %}
                       <span class="badge badge-active pill">Successful</span>
                     {% elif p.payment_status == 'refunded' %}
                       <span class="badge badge-expired pill">Refunded</span>
@@ -149,7 +152,48 @@
               {% endfor %}
             </div>
           {% else %}
-            <div class="text-center text-muted py-4">No payments found</div>
+            <div class="text-center text-muted py-4">No subscription payments found.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="section-card p-3">
+          <h5 class="mb-3"><i class="fas fa-wallet text-secondary"></i> Boost Payments</h5>
+          {% if boost_payments and boost_payments|length > 0 %}
+            <div class="row g-3">
+              {% for p in boost_payments %}
+              <div class="col-12">
+                <div class="promo-card d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="fw-semibold">Amount: ₹{{ p.amount|int }}</div>
+                    <div class="small">
+                      <i class="" id="boostm{{ p.id }}"></i>
+                      <script>document.getElementById('boostm{{ p.id }}').className = iconForMethod('{{ p.payment_method }}');</script>
+                      <span class="muted">Method:</span> {{ p.payment_method|replace('_',' ')|title }}
+                      • <span class="muted">Package:</span> {{ p.package_name }}
+                    </div>
+                    <div class="small"><span class="muted">Product:</span> {{ p.listing_title }}</div>
+                    <div class="small"><span class="muted">Transaction ID:</span> {{ p.transaction_id }} • <span class="muted">Date:</span> {{ p.created_at }}</div>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    {% if p.payment_status in ['success','paid','completed'] %}
+                      <span class="badge badge-active pill">Successful</span>
+                    {% elif p.payment_status == 'refunded' %}
+                      <span class="badge badge-expired pill">Refunded</span>
+                    {% else %}
+                      <span class="badge badge-expired pill">{{ p.payment_status|capitalize }}</span>
+                    {% endif %}
+                    {% if p.invoice_available %}
+                      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('invoice_download', payment_id=p.id) }}"><i class="fas fa-file-invoice"></i> Download Invoice</a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">No boost payments found.</div>
           {% endif %}
         </div>
       </div>

@@ -71,6 +71,22 @@
     margin-top: 4px;
   }
 
+  .boost-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    color: white !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .boost-btn:hover {
+    background: linear-gradient(135deg, #5b6bd7 0%, #5e3bb9 100%);
+    box-shadow: 0 6px 15px rgba(102, 126, 234, 0.25);
+    color: white !important;
+  }
+
   .boost-btn-recommended {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     border-color: #667eea !important;
@@ -185,6 +201,9 @@
                          data-view-count="{{ ad.view_count | default(0) }}"
                          data-messages-count="{{ ad.messages_count | default(0) }}"
                          data-boost-expires="{{ ad.boost_expires_date.strftime('%Y-%m-%d %H:%M:%S') if ad.boost_expires_date else '' }}"
+                         data-status="{{ ad.status }}"
+                         data-approval-status="{{ ad.approval_status }}"
+                         data-is-sold="{{ 1 if ad.is_sold else 0 }}"
                          data-is-boosted="{{ 1 if ad.is_boosted else 0 }}">
                         <!-- Boost Recommendation Badge (added by JavaScript) -->
                         <div class="boost-recommendation-badge-container"></div>
@@ -276,7 +295,11 @@
                                 <div class="card-footer bg-white border-0 pt-0">
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Actions">
                                         <a href="/edit-product/{{ ad.id }}" class="btn btn-outline-secondary" onclick="event.stopPropagation();">Edit</a>
-                                        <a href="{{ url_for('boost_listing', listing_id=ad.id) }}" class="btn btn-outline-warning boost-btn" onclick="event.stopPropagation();"><i class="fas fa-bolt"></i> Boost</a>
+                                        {% if not ad.is_sold and ad.status == 'active' and ad.approval_status == 'approved' %}
+                                            <a href="{{ url_for('boost_listing', listing_id=ad.id) }}" class="btn boost-btn" onclick="event.stopPropagation();"><i class="fas fa-bolt"></i> Boost</a>
+                                        {% else %}
+                                            <button type="button" class="btn btn-outline-secondary" disabled><i class="fas fa-bolt"></i> Boost</button>
+                                        {% endif %}
                                         <a href="/mark-sold/{{ ad.id }}" class="btn btn-outline-success" onclick="event.stopPropagation(); return confirm('Mark this item as sold?');">Mark as Sold</a>
                                         <a href="/delete-product/{{ ad.id }}" class="btn btn-outline-danger" onclick="event.stopPropagation(); return confirm('Delete this listing?');">Delete</a>
                                         {% if ad.days_remaining is not none and ad.days_remaining == 0 %}
@@ -360,22 +383,32 @@ document.addEventListener('DOMContentLoaded', function () {
     const viewCount = parseInt(card.getAttribute('data-view-count') || 0);
     const messagesCount = parseInt(card.getAttribute('data-messages-count') || 0);
     const boostExpires = card.getAttribute('data-boost-expires');
+    const status = card.getAttribute('data-status');
+    const approvalStatus = card.getAttribute('data-approval-status');
+    const isSold = card.getAttribute('data-is-sold') === '1';
     const isBoosted = card.getAttribute('data-is-boosted') === '1';
+
+    // Only recommend boost actions for active, approved, unsold listings
+    if (isSold || status !== 'active' || approvalStatus !== 'approved') {
+      return;
+    }
 
     // Calculate ad age in days
     const adAge = createdAt ? Math.floor((new Date() - new Date(createdAt)) / (1000 * 60 * 60 * 24)) : 0;
 
-    // Calculate days since last boost
+    // Calculate days since last boost and boost visibility remaining days
     let daysSinceLastBoost = null;
+    let boostDaysRemaining = null;
     if (boostExpires) {
       const boostEndDate = new Date(boostExpires);
       const now = new Date();
-      if (boostEndDate < now) {
-        // Boost has expired, calculate from expiry date
-        daysSinceLastBoost = Math.floor((now - boostEndDate) / (1000 * 60 * 60 * 24));
-      } else {
-        // Boost is still active
+      const remainingMs = boostEndDate - now;
+      if (remainingMs > 0) {
         daysSinceLastBoost = 0;
+        boostDaysRemaining = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+      } else {
+        daysSinceLastBoost = Math.floor((now - boostEndDate) / (1000 * 60 * 60 * 24));
+        boostDaysRemaining = 0;
       }
     }
 
@@ -427,7 +460,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     // 6. CURRENTLY BOOSTED
     else if (boostExpires && daysSinceLastBoost === 0) {
-      statusText = 'Currently boosted';
+      if (boostDaysRemaining !== null) {
+        statusText = boostDaysRemaining > 0
+          ? `Visible on homepage for ${boostDaysRemaining} day${boostDaysRemaining === 1 ? '' : 's'}`
+          : 'Boost expires today';
+      } else {
+        statusText = 'Currently boosted';
+      }
     }
     // 7. BOOST EXPIRED RECENTLY
     else if (boostExpires && daysSinceLastBoost > 0 && daysSinceLastBoost < 3) {

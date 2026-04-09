@@ -7,131 +7,254 @@
 <div class="page-header mb-4">
     <h1 class="mb-2"><i class="fas fa-chart-line"></i> Dashboard Overview</h1>
     <p class="text-muted">Welcome to ReGear Admin Panel</p>
+    <div id="dashboardError" class="alert alert-danger d-none" role="alert"></div>
 </div>
 
-<!-- Top Statistics -->
-<div class="row mb-4">
-
-<div class="col-md-3 mb-3">
-<div class="card">
-<div class="card-body d-flex justify-content-between align-items-center">
-<div>
-<div class="small text-muted">New Users Today</div>
-<div class="h4 mb-0">{{ stats.new_users_today|default(0) }}</div>
-<div class="small text-success">+{{ stats.new_users_growth|default(0) }}%</div>
-</div>
-<i class="fas fa-user-plus fa-2x text-success"></i>
-</div>
-</div>
+<!-- Dashboard Loader -->
+<div id="dashboardLoader" class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm py-4 text-center">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mb-0 mt-3 text-muted">Loading dashboard metrics...</p>
+        </div>
+    </div>
 </div>
 
-<div class="col-md-3 mb-3">
-<div class="card">
-<div class="card-body d-flex justify-content-between align-items-center">
-<div>
-<div class="small text-muted">Listings Today</div>
-<div class="h4 mb-0">{{ stats.listings_today|default(0) }}</div>
-<div class="small text-success">+{{ stats.listings_growth|default(0) }}%</div>
-</div>
-<i class="fas fa-plus-circle fa-2x text-warning"></i>
-</div>
-</div>
-</div>
-
-<div class="col-md-3 mb-3">
-<div class="card">
-<div class="card-body d-flex justify-content-between align-items-center">
-<div>
-<div class="small text-muted">Total Transactions</div>
-<div class="h4 mb-0">{{ stats.total_transactions|default(0) }}</div>
-</div>
-<i class="fas fa-receipt fa-2x text-info"></i>
-</div>
-</div>
-</div>
-
-<div class="col-md-3 mb-3">
-<div class="card">
-<div class="card-body d-flex justify-content-between align-items-center">
-<div>
-<div class="small text-muted">Revenue This Month</div>
-<div class="h4 mb-0">
-₹{{ "{:,.0f}".format(stats.revenue_month|default(0)|float) }}
-</div>
-</div>
-<i class="fas fa-chart-line fa-2x text-success"></i>
-</div>
-</div>
-</div>
-
-</div>
-
-<!-- User Stats -->
-<div class="row mb-4">
-
-<div class="col-md-3 mb-3">
-<div class="card bg-primary text-white">
-<div class="card-body">
-<p class="text-white-50 mb-1">Total Users</p>
-<h3>{{ stats.total_users|default(0) }}</h3>
-</div>
-</div>
-</div>
-
-<div class="col-md-3 mb-3">
-<div class="card bg-success text-white">
-<div class="card-body">
-<p class="text-white-50 mb-1">Active Users</p>
-<h3>{{ stats.active_users|default(0) }}</h3>
-</div>
-</div>
+<!-- Top Dashboard Metrics -->
+<div id="dashboardCards" class="row g-3 mb-4 d-none">
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card border-start border-4 border-primary shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Total Users</p>
+                <h3 class="mb-0" id="totalUsers">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card border-start border-4 border-success shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Active Users</p>
+                <h3 class="mb-0" id="activeUsers">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card border-start border-4 border-warning shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">New Users Today</p>
+                <h3 class="mb-0" id="newUsersToday">0</h3>
+                <small class="text-success" id="newUsersGrowthLabel">+0% vs yesterday</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card border-start border-4 border-info shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Total Listings</p>
+                <h3 class="mb-0" id="totalListings">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card border-start border-4 border-secondary shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Active Listings</p>
+                <h3 class="mb-0" id="activeListings">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-2 col-md-4 col-sm-6">
+        <div class="card border-start border-4 border-success shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Revenue This Month</p>
+                <h3 class="mb-0" id="revenueMonth">₹0</h3>
+                <small class="text-secondary" id="revenueGrowthLabel">+0% vs last month</small>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="col-md-3 mb-3">
-<div class="card bg-danger text-white">
-<div class="card-body">
-<p class="text-white-50 mb-1">Blocked Users</p>
-<h3>{{ stats.blocked_users|default(0) }}</h3>
-</div>
-</div>
+<!-- Revenue & Activity Summary -->
+<div id="dashboardSummary" class="row g-3 mb-4 d-none">
+    <div class="col-lg-3 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Boosted Ads Active</p>
+                <h3 class="mb-0" id="boostedAdsActive">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Total Revenue</p>
+                <h3 class="mb-0" id="totalRevenue">₹0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Active Subscriptions</p>
+                <h3 class="mb-0" id="activeSubscriptions">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Pending Complaints</p>
+                <h3 class="mb-0" id="pendingComplaints">0</h3>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="col-md-3 mb-3">
-<div class="card bg-warning text-white">
-<div class="card-body">
-<p class="text-white-50 mb-1">Pending Complaints</p>
-<h3>{{ stats.pending_complaints|default(0) }}</h3>
-</div>
-</div>
-</div>
-
+<!-- Trend Metrics -->
+<div id="dashboardBreakdown" class="row g-3 mb-4 d-none">
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Listings Today</p>
+                <h4 class="mb-1" id="listingsToday">0</h4>
+                <small class="text-warning" id="listingsGrowthLabel">+0% vs yesterday</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">New Users 7 Days</p>
+                <h4 class="mb-0" id="newUsers7Days">0</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">User Growth</p>
+                <h4 class="mb-1" id="userGrowth">0%</h4>
+                <small class="text-muted">vs last week</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Boost Revenue</p>
+                <h4 class="mb-0" id="boostRevenue">₹0</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Boosted Listings</p>
+                <h4 class="mb-0" id="boostedListings">0</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-1">Listings Status</p>
+                <h6 class="mb-1"><span id="statusActive">0</span> active</h6>
+                <h6 class="mb-1"><span id="statusPending">0</span> pending</h6>
+                <h6 class="mb-0"><span id="statusSold">0</span> sold</h6>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Charts -->
-<div class="row mb-4">
+<div id="dashboardCharts" class="row g-4 mb-4 d-none">
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-chart-line"></i> Revenue Trend</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="revenueTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-user-plus"></i> User Growth</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="userGrowthChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-boxes"></i> Listings Trend</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="listingsTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-tags"></i> Top Categories</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="topCategoriesChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Subscription Mix</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="subscriptionChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-balance-scale-left"></i> Status Breakdown</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 
-<div class="col-lg-6 mb-3">
-<div class="card">
-<div class="card-header bg-light">
-<h5 class="mb-0"><i class="fas fa-pie-chart"></i> Category Distribution</h5>
-</div>
-<div class="card-body">
-<canvas id="categoryChart"></canvas>
-</div>
-</div>
-</div>
-
-<div class="col-lg-6 mb-3">
-<div class="card">
-<div class="card-header bg-light">
-<h5 class="mb-0"><i class="fas fa-chart-bar"></i> Product Growth</h5>
-</div>
-<div class="card-body">
-<canvas id="productChart"></canvas>
-</div>
-</div>
-</div>
-
+<!-- Smart Insights -->
+<div id="dashboardInsights" class="row mb-4 d-none">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-lightbulb"></i> Smart Insights</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group" id="smartInsightsList"></ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-bolt"></i> Boost Performance</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-1">Boost Revenue</p>
+                <h4 class="mb-3" id="boostRevenueCard">₹0</h4>
+                <p class="text-muted small mb-1">Boosted Listings</p>
+                <h4 class="mb-0" id="boostedListingsCard">0</h4>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Quick Actions -->
@@ -178,56 +301,306 @@
 </div>
 
 
-<!-- Chart JS -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
 
-const recentListings = {{ stats.recent_listings|default([])|tojson }};
-const categoryData = {{ stats.category_distribution|default([])|tojson }};
-
-if(recentListings.length){
-
-const ctx = document.getElementById("productChart").getContext("2d");
-
-new Chart(ctx,{
-type:'bar',
-data:{
-labels:recentListings.map(i=>i.date),
-datasets:[{
-label:'Listings',
-data:recentListings.map(i=>i.count),
-backgroundColor:'rgba(54,162,235,0.6)'
-}]
-},
-options:{responsive:true}
-})
-
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(amount);
 }
 
-if(categoryData.length){
-
-const ctx2 = document.getElementById("categoryChart").getContext("2d");
-
-new Chart(ctx2,{
-type:'doughnut',
-data:{
-labels:categoryData.map(i=>i.category),
-datasets:[{
-data:categoryData.map(i=>i.count),
-backgroundColor:[
-'#3b82f6',
-'#10b981',
-'#f59e0b',
-'#ef4444',
-'#8b5cf6'
-]
-}]
-},
-options:{responsive:true}
-})
-
+function safeNumber(value) {
+    return value !== null && value !== undefined ? value : 0;
 }
+
+let revenueTrendChart = null;
+let userGrowthChart = null;
+let listingsTrendChart = null;
+let topCategoriesChart = null;
+let subscriptionChart = null;
+let statusChart = null;
+
+function getElement(id) {
+    return document.getElementById(id);
+}
+
+function setText(id, value) {
+    const element = getElement(id);
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function toggleClass(id, className, condition) {
+    const element = getElement(id);
+    if (element) {
+        element.classList.toggle(className, condition);
+    }
+}
+
+function showDashboardState(success) {
+    toggleClass('dashboardLoader', 'd-none', success);
+    toggleClass('dashboardCards', 'd-none', !success);
+    toggleClass('dashboardSummary', 'd-none', !success);
+    toggleClass('dashboardBreakdown', 'd-none', !success);
+    toggleClass('dashboardCharts', 'd-none', !success);
+    toggleClass('dashboardInsights', 'd-none', !success);
+}
+
+function resetCharts() {
+    [revenueTrendChart, userGrowthChart, listingsTrendChart, topCategoriesChart, subscriptionChart, statusChart].forEach(chart => {
+        if (chart) {
+            chart.destroy();
+        }
+    });
+    revenueTrendChart = null;
+    userGrowthChart = null;
+    listingsTrendChart = null;
+    topCategoriesChart = null;
+    subscriptionChart = null;
+    statusChart = null;
+}
+
+function renderDashboardCards(stats) {
+    stats = stats || {};
+    setText('totalUsers', safeNumber(stats.totalUsers || stats.total_users));
+    setText('activeUsers', safeNumber(stats.activeUsers || stats.active_users));
+    setText('newUsersToday', safeNumber(stats.newUsersToday || stats.new_users_today));
+    setText('newUsersGrowthLabel', `${safeNumber(stats.newUsersGrowth || stats.new_users_growth)}% vs yesterday`);
+    setText('totalListings', safeNumber(stats.totalListings || stats.total_listings));
+    setText('activeListings', safeNumber(stats.activeListings || stats.active_listings));
+    setText('revenueMonth', formatCurrency(safeNumber(stats.revenueThisMonth || stats.revenue_month)));
+    setText('revenueGrowthLabel', `${safeNumber(stats.revenueGrowth || stats.revenue_growth)}% vs last month`);
+    setText('boostedAdsActive', safeNumber(stats.boostedAds || stats.boosted_ads_active));
+    setText('totalRevenue', formatCurrency(safeNumber(stats.totalRevenue || stats.total_revenue || stats.revenue_month)));
+    const subscriptions = stats.subscriptionStats || stats.subscription_stats || {};
+    setText('activeSubscriptions', safeNumber(subscriptions.active_subscriptions));
+    setText('pendingComplaints', safeNumber(stats.pending_complaints));
+    setText('listingsToday', safeNumber(stats.listingsToday || stats.listings_today));
+    setText('listingsGrowthLabel', `${safeNumber(stats.listings_growth)}% vs yesterday`);
+    setText('newUsers7Days', safeNumber(stats.newUsers7Days || stats.new_users_7_days));
+    setText('userGrowth', `${safeNumber(stats.userGrowth || stats.user_growth)}%`);
+    const boostStats = stats.boostStats || stats.boost_stats || {};
+    setText('boostRevenue', formatCurrency(safeNumber(boostStats.boost_revenue)));
+    setText('boostedListings', safeNumber(boostStats.boosted_listings));
+    setText('boostRevenueCard', formatCurrency(safeNumber(boostStats.boost_revenue)));
+    setText('boostedListingsCard', safeNumber(boostStats.boosted_listings));
+    const statusBreakdown = stats.listingStatusBreakdown || stats.listing_status_breakdown || {};
+    setText('statusActive', safeNumber(statusBreakdown.active));
+    setText('statusPending', safeNumber(statusBreakdown.pending));
+    setText('statusSold', safeNumber(statusBreakdown.sold));
+}
+
+function renderInsightList(insights) {
+    const list = getElement('smartInsightsList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!insights || !insights.length) {
+        list.innerHTML = '<li class="list-group-item">No insights available right now.</li>';
+        return;
+    }
+    insights.forEach(insight => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item';
+        item.textContent = insight;
+        list.appendChild(item);
+    });
+}
+
+function renderChart(canvasId, configBuilder) {
+    const canvas = getElement(canvasId);
+    if (!canvas) return null;
+    const ctx = canvas.getContext('2d');
+    return new Chart(ctx, configBuilder());
+}
+
+function renderRevenueTrendChart(data) {
+    revenueTrendChart = renderChart('revenueTrendChart', () => ({
+        type: 'line',
+        data: {
+            labels: data.map(item => item.date),
+            datasets: [{
+                label: 'Revenue',
+                data: data.map(item => item.total),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    }));
+}
+
+function renderUserGrowthChart(data) {
+    userGrowthChart = renderChart('userGrowthChart', () => ({
+        type: 'line',
+        data: {
+            labels: data.map(item => item.date),
+            datasets: [{
+                label: 'New Users',
+                data: data.map(item => item.count),
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    }));
+}
+
+function renderListingsTrendChart(data) {
+    listingsTrendChart = renderChart('listingsTrendChart', () => ({
+        type: 'bar',
+        data: {
+            labels: data.map(item => item.date),
+            datasets: [{
+                label: 'New Listings',
+                data: data.map(item => item.count),
+                backgroundColor: '#f59e0b'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    }));
+}
+
+function renderTopCategoriesChart(data) {
+    topCategoriesChart = renderChart('topCategoriesChart', () => ({
+        type: 'doughnut',
+        data: {
+            labels: data.map(item => item.category),
+            datasets: [{
+                data: data.map(item => item.count),
+                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    }));
+}
+
+function renderSubscriptionChart(stats) {
+    const labels = ['Starter', 'Growth', 'Premium'];
+    const values = [stats.starter || 0, stats.growth || 0, stats.premium || 0];
+    subscriptionChart = renderChart('subscriptionChart', () => ({
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: ['#3b82f6', '#10b981', '#f59e0b']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    }));
+}
+
+function renderStatusChart(statusBreakdown) {
+    const labels = ['Active', 'Pending', 'Sold'];
+    const values = [statusBreakdown.active || 0, statusBreakdown.pending || 0, statusBreakdown.sold || 0];
+    statusChart = renderChart('statusChart', () => ({
+        type: 'pie',
+        data: {
+            labels,
+            datasets: [{
+                data: values,
+                backgroundColor: ['#10b981', '#f59e0b', '#6366f1']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    }));
+}
+
+async function fetchDashboardData(endpoint) {
+    const response = await fetch(endpoint, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+    });
+    if (!response.ok) {
+        let message = `API Error ${response.status}`;
+        try {
+            const errorBody = await response.json();
+            if (errorBody && errorBody.error) {
+                message = errorBody.error;
+            }
+        } catch (_) {
+            // ignore invalid JSON body
+        }
+        throw new Error(message);
+    }
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+        const bodyText = await response.text();
+        throw new Error(`Expected JSON response but received: ${bodyText.slice(0, 300)}`);
+    }
+    return await response.json();
+}
+
+async function loadAdminDashboard() {
+    const primaryEndpoint = '{{ url_for('admin.dashboard_api') }}';
+    const fallbackEndpoint = `${window.location.pathname}?json=1`;
+    const errorBox = getElement('dashboardError');
+    if (errorBox) {
+        errorBox.classList.add('d-none');
+    }
+    showDashboardState(false);
+
+    try {
+        let stats;
+        try {
+            stats = await fetchDashboardData(primaryEndpoint);
+        } catch (primaryError) {
+            console.warn('Primary dashboard API failed, retrying with current route:', primaryError);
+            stats = await fetchDashboardData(fallbackEndpoint);
+        }
+        renderDashboardCards(stats);
+        renderInsightList(stats.smartInsights || []);
+        resetCharts();
+        renderRevenueTrendChart(stats.revenueTrend || stats.revenue_trend || []);
+        renderUserGrowthChart(stats.usersTrend || stats.users_trend || []);
+        renderListingsTrendChart(stats.listingsTrend || stats.listings_growth_trend || []);
+        renderTopCategoriesChart(stats.topCategories || stats.category_distribution || []);
+        renderSubscriptionChart(stats.subscriptionStats || stats.subscription_stats || {});
+        renderStatusChart(stats.listingStatusBreakdown || stats.listing_status_breakdown || {});
+        showDashboardState(true);
+    } catch (error) {
+        console.error('Admin dashboard load failed:', error);
+        toggleClass('dashboardLoader', 'd-none', true);
+        if (errorBox) {
+            errorBox.classList.remove('d-none');
+            errorBox.textContent = error.message || 'Unable to load dashboard data. Please refresh the page.';
+        }
+    }
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+    loadAdminDashboard();
+    setInterval(loadAdminDashboard, 60000);
+});
 
 </script>
 
